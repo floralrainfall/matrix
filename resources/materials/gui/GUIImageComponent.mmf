@@ -1,0 +1,2 @@
+glvertex=shaders/gui/gui.vert
+glfragment=shaders/gui/GUIImageComponent.frag
