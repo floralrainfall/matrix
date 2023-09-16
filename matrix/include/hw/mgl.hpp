@@ -25,7 +25,11 @@ namespace mtx::gl
         GLTexture();
         virtual ~GLTexture();
 
+        // uploads an RGBA image
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true);
+        virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true);
+
+        void setFilter(GLenum min, GLenum mag);
 
         GLuint getId() { return m_glTextureId; }
     };

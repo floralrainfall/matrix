@@ -33,6 +33,7 @@ add_library(matrix STATIC
     include/mmaterial.hpp
     include/mcfg.hpp
     include/mview.hpp
+    include/mbsp.hpp
     include/stb_image.h
 
     src/mhwabs.cpp
@@ -45,6 +46,7 @@ add_library(matrix STATIC
     src/mmaterial.cpp
     src/mcfg.cpp
     src/mview.cpp
+    src/mbsp.cpp
 )
 
 target_compile_definitions(matrix PUBLIC
@@ -55,5 +57,6 @@ target_compile_definitions(matrix PUBLIC
 
 target_link_libraries(matrix_gl PUBLIC matrix glad)
 target_link_libraries(matrix_sdl PUBLIC matrix)
+
 target_link_libraries(matrix PUBLIC SDL2 glm matrix_gl matrix_sdl assimp) 
 target_include_directories(matrix PUBLIC include)

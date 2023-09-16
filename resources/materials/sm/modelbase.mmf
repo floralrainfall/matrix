@@ -1,0 +1,3 @@
+# Base SM Material
+glvertex=shaders/sm/model.vert
+reference=true

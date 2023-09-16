@@ -26,8 +26,13 @@ namespace mtx
     class MaterialComponent : public SceneComponent
     {
         Material* m_material;
+
+        int m_kSpecular;
     public:
-        MaterialComponent(Material* material);
+        MaterialComponent(Material* material = 0);
+        void addShaderParams();
+        void popShaderParams();
+        void updateFromModelComponent();
 
         virtual std::string className() { return "MaterialComponent"; }
         void setMaterial(Material* material) { m_material = material; }

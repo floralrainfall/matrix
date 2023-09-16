@@ -1,10 +1,14 @@
 #include <mfile.hpp>
 #include <mdev.hpp>
+#include <unistd.h>
 
 namespace mtx
 {
     FileSystem::FileSystem()
     {
+        char cwd[PATH_MAX];
+        getcwd(cwd, PATH_MAX);
+        DEV_MSG("cwd: %s",cwd);
         addDirectory("resources");
         addDirectory("matrix");
         addDirectory("../resources");
@@ -43,7 +47,7 @@ namespace mtx
             if(f)
                 return f;
         }
-        DEV_MSG("could not open file %s mode %s", file, mode);
+        DEV_WARN("could not open file %s mode %s", file, mode);
         return NULL;
     }
 

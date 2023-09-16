@@ -12,6 +12,8 @@ namespace mtx
         m_clearColor = glm::vec4(1,0,1,1);
 
         m_cameraNode = 0;
+        m_nearDistance = 0.1f;
+        m_farDistance = 100.f;
     }
 
     void Viewport::beginViewportFrame()
@@ -43,7 +45,7 @@ namespace mtx
         SceneTransform cameraTransform = camera->getTransform();
         m_viewMatrix = cameraTransform.getWorldMatrix();
         m_viewPosition = cameraTransform.getPosition();
-        m_perspectiveMatrix = glm::perspectiveFov(120.f * ((float)M_PI / 180.f), m_viewport.z, m_viewport.w, 0.1f, 100.f);
+        m_perspectiveMatrix = glm::perspectiveFov(90.f * ((float)M_PI / 180.f), m_viewport.z, m_viewport.w, m_nearDistance, m_farDistance);
         m_uiTransform = glm::ortho(0.f, m_viewport.z, 0.f, m_viewport.w);
     }
 }

@@ -1,6 +1,6 @@
 #include <mapp.hpp>
 #include <mdev.hpp>
-
+#include <algorithm>
 #include <hw/msdl.hpp>
 
 namespace mtx
@@ -15,37 +15,79 @@ namespace mtx
         if(m_fileSystem == 0)
             m_fileSystem = new FileSystem();
         m_appRunning = true;
+        m_appHeadless = false;
     }
 
     int App::main()
     {
         init();
 
-        if(m_windows.size() == 0)
-            DEV_MSG("there were 0 windows after init was called, we wont start loop");
-
         struct timeval timecheck;
         gettimeofday(&timecheck, NULL);
         m_appStart = (double)timecheck.tv_sec + ((double)timecheck.tv_usec) / 1e+6;
+        
+        if(m_windows.size() == 0)
+        {                        
+            m_appHeadless = true;
+            m_timeTillNextAnnouncement = 0.f;
+        }
 
-        while(m_windows.size() != 0)
+        while(m_appRunning)
         {
+            for(auto m : m_sceneManagers)
+                m->tickScene();
             tick();
             int p = 0;
-            for(auto window : m_windows)
-            {
-                window->pumpEvent();
+
+            m_hwApi->pumpOSEvents();
+
+            m_appFrameStart = getExecutionTime();
+            for(int i = 0; i < m_windows.size(); i++) {
+                Window* window = m_windows.at(i);
                 window->frame();
 
                 if(window->m_shouldClose)
                 {
                     m_windows.erase(m_windows.begin() + p);
+                    if(m_windows.size() == 0 && m_appRunning)
+                    {
+                        DEV_MSG("last window closed, entering headless mode");
+                        m_appHeadless = true;
+                        m_timeTillNextAnnouncement = 0.f;
+                    }
 
                     delete window;
                     break;
                 }
             }
+
+            if(m_appHeadless)
+            {
+                if(m_timeTillNextAnnouncement < m_appFrameStart)
+                {
+                    DEV_MSG("Time: %f, Tick DT: %f, Ticks/Second: %f", getExecutionTime(), m_deltaTime, 1.0 / m_deltaTime);
+                    m_timeTillNextAnnouncement = m_appFrameStart + 5.f;
+                }
+            }
+
+            m_deltaTime = getExecutionTime() - m_appFrameStart;
         }
+
+        DEV_MSG("cleaning up");
+
+        stop();
+
+        // clean up time
+        for(int i = 0; i < m_windows.size(); i++)
+        {
+            Window* window = m_windows.at(i);
+            DEV_MSG("shutting down window %i", i);
+            delete window;
+        }        
+
+        DEV_MSG("goodbye");
+
+        return 0;
     }
 
     void App::initParameters(int argc, char** argv)
@@ -79,9 +121,11 @@ namespace mtx
         m_shouldClose = false;
     }
 
-    void Window::addListener(EventListener* listener)
+    Window::~Window()
     {
-        m_listeners.push_back(listener);
+        delete m_hwWindow;
+        for(auto vp : m_viewports)
+            delete vp;
     }
 
     void Window::frame()
@@ -115,11 +159,6 @@ namespace mtx
             App::getHWAPI()->clearParams();
         }
         m_hwWindow->endFrame();
-    }
-
-    void Window::pumpEvent()
-    {
-        m_hwWindow->pumpOSEvents(this);
     }
 
     void Window::init()

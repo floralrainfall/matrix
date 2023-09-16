@@ -18,11 +18,13 @@ namespace mtx
         m_modelBuffer = App::getHWAPI()->newBuffer();
         m_indexBuffer = App::getHWAPI()->newBuffer();
         m_modelIndicesCount = 0;
+        m_modelSkinned = false;
 
         if(m_modelScene)
         {        
             DEV_MSG("model has %i meshes", m_modelScene->mNumMeshes);
             aiMesh* mesh = m_modelScene->mMeshes[0];
+            m_usedMesh = mesh;
             
             DEV_MSG("model has %i textures", m_modelScene->mNumTextures);
             for(int i = 0; i < m_modelScene->mNumTextures; i++)
@@ -47,6 +49,18 @@ namespace mtx
                 }
                 m_modelTextures.push_back(hwtx);
             }
+
+            if(mesh->HasBones())
+            {
+                DEV_MSG("mesh has %i bones", mesh->mNumBones);
+                m_modelSkinned = true;
+                for(int i = 0; i < mesh->mNumBones; i++)
+                {
+                    aiBone* bone = mesh->mBones[i];
+
+                }
+            }
+
 
             std::vector<ModelVertex> meshData;
             std::vector<int> indices;
@@ -108,6 +122,12 @@ namespace mtx
 
     ModelComponent::ModelComponent(const char* model)
     {
+        if(model)
+            setModel(model);
+    }
+
+    void ModelComponent::setModel(const char* model)
+    {
         m_modelData = ModelData::loadCached(model);
     }
 
@@ -116,8 +136,11 @@ namespace mtx
         if(m_modelData && m_modelData->m_modelScene)
         {
             MaterialComponent* materialcomp = (MaterialComponent*)m_node->getComponent("MaterialComponent");
-            if(materialcomp && materialcomp->getMaterial())
+            if(materialcomp && materialcomp)
             {
+                if(!materialcomp->getMaterial())
+                    materialcomp->updateFromModelComponent();
+
                 HWProgramReference* program = materialcomp->getMaterial()->getProgram();
                 HWRenderParameter rp;
 
@@ -125,7 +148,8 @@ namespace mtx
                 {
                     HWTextureReference* texture = m_modelData->m_modelTextures[i];
                     rp.name = std::string("texture") + std::to_string(i);
-                    rp.data.tx = texture;
+                    rp.data.tx.tx = texture;
+                    rp.data.tx.slot = i;
                     rp.type = HWT_TEXTURE;
                     App::getHWAPI()->pushParam(rp);
                 }
@@ -134,6 +158,8 @@ namespace mtx
                 rp.data.m4 = m_node->getTransform().getWorldMatrix();
                 rp.type = HWT_MATRIX4;
                 App::getHWAPI()->pushParam(rp);
+
+                materialcomp->addShaderParams();
                 
                 App::getHWAPI()->gfxUseLayout(m_modelData->m_modelLayout);
                 App::getHWAPI()->gfxDrawElements(mtx::HWAPI::HWPT_TRIANGLES, 
@@ -141,13 +167,14 @@ namespace mtx
                                                  m_modelData->m_modelIndicesCount, 
                                                  m_modelData->m_indexBuffer, 
                                                  program);
+
+                materialcomp->popShaderParams();
+
                 App::getHWAPI()->popParam();
                 
                 for(int i = 0; i < m_modelData->m_modelTextures.size(); i++)
                     App::getHWAPI()->popParam();
             }
-            else
-                DEV_MSG("rendering ModelComponent without MaterialComponent & Material")
         }
     }
 }

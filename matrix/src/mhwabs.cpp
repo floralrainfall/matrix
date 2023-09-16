@@ -10,12 +10,12 @@ namespace mtx
 {
     void HWAPI::popParam()
     {
-        m_hwParams.pop_front();
+        m_hwParams.pop_back();
     }
 
     void HWAPI::pushParam(HWRenderParameter param)
     {
-        m_hwParams.push_front(param);
+        m_hwParams.push_back(param);
     }
 
     HWTextureReference* HWAPI::loadCachedTexture(const char* texture, bool autoload)
@@ -52,6 +52,11 @@ namespace mtx
         m_cachedTextures[name] = texture;
     }
 
+    void HWAPI::addListener(EventListener* listener)
+    {
+        m_listeners.push_back(listener);
+    }
+
     HWBufferReference::~HWBufferReference()
     {
 
@@ -62,7 +67,7 @@ namespace mtx
 
     }
 
-    void HWTextureReference::uploadCompressedTexture(int size, void* data)
+    bool HWTextureReference::uploadCompressedTexture(int size, void* data)
     {
         int resX;
         int resY;
@@ -70,9 +75,12 @@ namespace mtx
 
         stbi_set_flip_vertically_on_load(true);
         stbi_uc* img_data = stbi_load_from_memory((const stbi_uc*)data, size, &resX, &resY, &comp, 4);
+        if(!img_data)
+            return false;
 
         DEV_MSG("read compressed %ix%i, c: %i image", resX, resY, comp);
         upload(glm::ivec2(resX, resY), img_data);
+        return true;
     }
 
     HWProgramReference::~HWProgramReference()

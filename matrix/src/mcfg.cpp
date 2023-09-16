@@ -14,11 +14,16 @@ namespace mtx
             char line[512];
             while(std::fgets(line, 512, f))
             {
+                if(line[0] == '#')
+                    continue;
                 std::string name = std::strtok(line, "=");
                 std::string text = std::strtok(NULL, "\n");
                 m_values[name] = text;
             }
+            m_found = true;
         }
+        else
+            m_found = false;
     }
 
     std::string ConfigFile::getValue(const char* property)

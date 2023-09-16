@@ -9,9 +9,11 @@ namespace mtx::sdl
     {
         DEV_MSG("initialized SDLAPI");
 
+        m_firstWindow = 0;
+
         if(SDL_Init(SDL_INIT_VIDEO) < 0)
-            DEV_MSG("couldnt initialize SDL");
-        
+            DEV_WARN("couldnt initialize SDL");
+
         SDL_GL_LoadLibrary(NULL);
     }
 
@@ -23,11 +25,61 @@ namespace mtx::sdl
             SDLWindow::m_glCtxt = 0;
         }
     }
+    
+    void SDLAPI::pumpOSEvents()
+    {
+        SDL_Event e;
+        while(SDL_PollEvent(&e))
+        {
+            switch(e.type)
+            {
+            case SDL_QUIT:
+                for(auto listener : getListeners())
+                    listener->onQuit();
+                break;
+            case SDL_KEYDOWN:
+                for(auto listener : getListeners())
+                    listener->onKeyDown(e.key.keysym.sym);
+                break;
+            case SDL_KEYUP: 
+                for(auto listener : getListeners())
+                    listener->onKeyUp(e.key.keysym.sym);
+                break;
+            }
+        }
+    }
+
+    void SDLAPI::showMessageBox(const char* title, const char* message, MessageBoxType type)
+    {
+        SDL_Window* window = 0;
+        int flags = 0;
+        switch(type)
+        {
+        default:
+        case HWMBT_INFORMATION:
+            flags = SDL_MESSAGEBOX_INFORMATION;
+            break;
+        case HWMBT_ERROR:
+            flags = SDL_MESSAGEBOX_ERROR;
+            break;
+        case HWMBT_WARNING:
+            flags = SDL_MESSAGEBOX_WARNING;
+            break;
+        }
+        if(m_firstWindow)
+            m_firstWindow->getSDLRef();
+        SDL_ShowSimpleMessageBox(flags, title, message, window);
+    }
 
     HWWindowReference* SDLAPI::newWindow(int resX, int resY)
     {
         SDLWindow* wref = new SDLWindow();
         wref->createWindow(glm::ivec2(resX, resY));
+        if(!m_firstWindow)
+        {
+            m_firstWindow = wref;
+            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLAPI by Ryelow <endoh@endoh.ca>");
+        }
         return (HWWindowReference*)wref;
     }
 
@@ -56,6 +108,8 @@ namespace mtx::sdl
             m_glCtxt = SDL_GL_CreateContext(m_sWind);
         gladLoadGLLoader(SDL_GL_GetProcAddress);
 
+        SDL_GL_SetSwapInterval(0);
+
         DEV_MSG("OpenGL loaded");
         DEV_MSG("vendor: %s", glGetString(GL_VENDOR))
         DEV_MSG("renderer: %s", glGetString(GL_RENDERER));
@@ -75,29 +129,6 @@ namespace mtx::sdl
         DEV_ASSERT(title);
 
         SDL_SetWindowTitle(m_sWind, title);
-    }
-
-    void SDLWindow::pumpOSEvents(Window* wind)
-    {
-        SDL_Event e;
-        while(SDL_PollEvent(&e))
-        {
-            switch(e.type)
-            {
-            case SDL_QUIT:
-                for(auto listener : wind->getListeners())
-                    listener->onCloseWindow(wind);
-                break;
-            case SDL_KEYDOWN:
-                for(auto listener : wind->getListeners())
-                    listener->onKeyDown(e.key.keysym.sym);
-                break;
-            case SDL_KEYUP: 
-                for(auto listener : wind->getListeners())
-                    listener->onKeyUp(e.key.keysym.sym);
-                break;
-            }
-        }
     }
 
     void SDLWindow::beginFrame()

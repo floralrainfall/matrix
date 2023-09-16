@@ -1,6 +1,8 @@
 #include <mmaterial.hpp>
 #include <mapp.hpp>
 #include <mdev.hpp>
+#include <mmodel.hpp>
+#include <format>
 #include <cstring>
 
 namespace mtx
@@ -10,19 +12,50 @@ namespace mtx
     Material::Material(const char* file)
     {
         m_file = new ConfigFile(file);
+        m_program = 0;
+        Material* inheritedMaterial = NULL;
+        
+        if(m_file->getValue("reference") == "true")
+            return;
+
         m_program = App::getHWAPI()->newProgram();
+
+        std::string inherit = m_file->getValue("inherit");
+        if(inherit != "null")
+        {
+            inheritedMaterial = Material::getMaterial(inherit.c_str());
+            DEV_MSG("inherited material %s", inherit.c_str());
+        }
 
         std::string vf = m_file->getValue("glvertex");
         if(vf != "null")
             addShader(HWProgramReference::HWPST_VERTEX, vf);
+        else if(inheritedMaterial)
+        {
+            vf = inheritedMaterial->m_file->getValue("glvertex");
+            if(vf != "null")
+                addShader(HWProgramReference::HWPST_VERTEX, vf);
+        }
 
         std::string ff = m_file->getValue("glfragment");
         if(ff != "null")
             addShader(HWProgramReference::HWPST_FRAGMENT, ff);
+        else if(inheritedMaterial)
+        {
+            ff = inheritedMaterial->m_file->getValue("glfragment");
+            if(ff != "null")
+                addShader(HWProgramReference::HWPST_FRAGMENT, ff);
+        }
 
         std::string gf = m_file->getValue("glgeometry");
         if(gf != "null")
             addShader(HWProgramReference::HWPST_GEOMETRY, gf);
+        else if(inheritedMaterial)
+        {
+            gf = inheritedMaterial->m_file->getValue("glgeometry");
+            if(gf != "null")
+                addShader(HWProgramReference::HWPST_GEOMETRY, gf);
+        }
 
         m_program->link();
     }
@@ -67,5 +100,58 @@ namespace mtx
     MaterialComponent::MaterialComponent(Material* material)
     {
         m_material = material;
+        m_kSpecular = 8;
+    }
+
+    void MaterialComponent::addShaderParams()
+    {
+        if(!m_material)
+            return;
+
+        HWRenderParameter rp;
+        rp.name = "specular_k";
+        rp.type = HWT_INT;
+        rp.data.i = m_kSpecular;
+        App::getHWAPI()->pushParam(rp);
+    }
+
+    void MaterialComponent::updateFromModelComponent()
+    {
+        ModelComponent* model = (ModelComponent*)m_node->getComponent("ModelComponent");
+        
+        DEV_ASSERT(model);
+        if(!model)
+            return;
+        
+        ModelData* data = model->getModelData();
+
+        DEV_ASSERT(data);
+        if(!data)
+            return;
+
+        if(!data->m_modelScene->HasMaterials())
+            return;
+
+        int index = data->m_usedMesh->mMaterialIndex;
+
+        DEV_ASSERT2(index, >, data->m_modelScene->mNumMaterials);
+        aiMaterial* material = data->m_modelScene->mMaterials[index];
+
+        DEV_ASSERT(material);
+        if(!material)
+            return;
+
+        aiShadingMode mode;
+        material->Get(AI_MATKEY_SHADING_MODEL, mode);
+        std::string modelname = std::format("materials/sm/model{}.mmf", (int)mode);
+        DEV_MSG("opening model %s", modelname.c_str());
+        m_material = Material::getMaterial(modelname.c_str());
+    }
+
+    void MaterialComponent::popShaderParams()
+    {
+        if(!m_material)
+            return;
+        App::getHWAPI()->popParam();
     }
 }

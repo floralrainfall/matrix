@@ -45,7 +45,10 @@ namespace mtx
             glm::vec4 v4;
             glm::mat3 m3;
             glm::mat4 m4;
-            HWTextureReference* tx;
+            struct {
+                HWTextureReference* tx;
+                int slot;
+            } tx;
         } data;
     };
 
@@ -85,7 +88,8 @@ namespace mtx
         glm::ivec2 getTextureSize() { return m_textureSize; }
         
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
-        void uploadCompressedTexture(int size, void* data);
+        virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
+        bool uploadCompressedTexture(int size, void* data);
     };
 
     class Window;
@@ -167,6 +171,15 @@ namespace mtx
             HWPT_TRIANGLES
         };
 
+        enum MessageBoxType
+        {
+            HWMBT_ERROR,
+            HWMBT_WARNING,
+            HWMBT_INFORMATION,
+        };
+
+        virtual void showMessageBox(const char* title, const char* message, MessageBoxType type = HWMBT_INFORMATION) {};
+
         virtual void gfxViewport(glm::vec4 viewport) =0;
         virtual void gfxClear(glm::vec4 color) = 0;
         virtual void gfxClearDepth(float depth) = 0;
@@ -182,5 +195,19 @@ namespace mtx
 
         HWTextureReference* loadCachedTexture(const char* texture, bool autoload = true);
         void addTextureToCache(HWTextureReference* texture, const char* name);
+
+        class EventListener
+        {
+        public:
+            virtual void onQuit() = 0;
+            virtual void onKeyDown(int key) = 0;
+            virtual void onKeyUp(int key) = 0;
+        };
+
+        std::vector<EventListener*> getListeners() { return m_listeners; }
+        void addListener(EventListener* listener);
+        virtual void pumpOSEvents() = 0;
+    private:
+        std::vector<EventListener*> m_listeners;
     };
 };

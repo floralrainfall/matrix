@@ -1,2 +1,2 @@
-glvertex=shaders/gui/gui.vert
+inherit=materials/gui/guibase.mmf
 glfragment=shaders/gui/GUIImageComponent.frag

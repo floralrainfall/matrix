@@ -18,6 +18,7 @@ namespace mtx
     public:
         // use App::newWindow instead
         Window();
+        ~Window();
 
         // newWindow calls this for you
         void init();
@@ -27,21 +28,7 @@ namespace mtx
         void addViewport(Viewport* viewport);
 
         void frame();
-        void pumpEvent();
         void setShouldClose(bool c) { m_shouldClose = c; }
-
-        class EventListener
-        {
-        public:
-            virtual void onCloseWindow(Window* window) = 0;
-            virtual void onKeyDown(int key) = 0;
-            virtual void onKeyUp(int key) = 0;
-        };
-
-        std::vector<EventListener*> getListeners() { return m_listeners; }
-        void addListener(EventListener* listener);
-    private:
-        std::vector<EventListener*> m_listeners;
     };
     
     class App
@@ -50,14 +37,25 @@ namespace mtx
         static FileSystem* m_fileSystem;
 
         std::vector<Window*> m_windows;
+        std::vector<SceneManager*> m_sceneManagers;
         bool m_appRunning;
+        bool m_appHeadless;
         double m_appStart;
+        double m_appFrameStart;
+        double m_deltaTime;
+        double m_timeTillNextAnnouncement;
     public:
         App();
 
-        virtual void init() {};
-        virtual void tick() {};
+        virtual void init() {}; // allocate/initialize the game here
+        virtual void tick() {}; // do stuff inbetween frames here
+        virtual void stop() {}; // deallocate all resources here
+
         double getExecutionTime();
+        double getDeltaTime() { return m_deltaTime; }
+
+        void setAppRunning(bool s) { m_appRunning = s; }
+        void addSceneManager(SceneManager* m) { m_sceneManagers.push_back(m); }
 
         Window* newWindow(Viewport* viewport = 0);
         void initParameters(int argc, char** argv);

@@ -32,8 +32,34 @@ namespace mtx::gl
         glBindTexture(GL_TEXTURE_2D, 0);
 
         m_textureSize = size;
+    }
 
-        DEV_MSG("uploaded %ix%i texture", size.x, size.y);
+    void GLTexture::setFilter(GLenum min, GLenum mag)
+    {        
+        glBindTexture(GL_TEXTURE_2D, m_glTextureId);
+        HWAPI_GL->checkError();
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    void GLTexture::uploadRGB(glm::ivec2 size, void* data, bool genMipMaps)
+    {
+        glBindTexture(GL_TEXTURE_2D, m_glTextureId);
+        HWAPI_GL->checkError();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        HWAPI_GL->checkError();
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        if(genMipMaps)
+            glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        m_textureSize = size;
     }
 
     GLBuffer::GLBuffer()
@@ -49,7 +75,6 @@ namespace mtx::gl
 
     void GLBuffer::upload(int size, void* data)
     {
-        DEV_MSG("uploading %i bytes to buffer %i", size, m_glBufferId);
         glBindBuffer(GL_ARRAY_BUFFER, m_glBufferId);
         glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
         HWAPI_GL->checkError();
@@ -193,7 +218,7 @@ namespace mtx::gl
         {
             char info_log[512];
             glGetProgramInfoLog(m_glProgramId, 512, NULL, info_log);
-            DEV_MSG("program linking FAILED:\n%s", info_log);
+            DEV_WARN("program linking FAILED:\n%s", info_log);
         }
 
         for(auto shader : m_unlinkedShaders)
@@ -227,7 +252,6 @@ namespace mtx::gl
             }
             glVertexAttribPointer(vaid, entry.components, typegl, entry.normalized, entry.stride, entry.offset);
             glEnableVertexArrayAttrib(m_glLayoutId, vaid);
-            DEV_MSG("added vap to vao %i, type %i", vaid, typegl);
             vaid++;
         }
     }
@@ -279,7 +303,6 @@ namespace mtx::gl
             DEV_MSG("GL error: %04x @ %s", gl_error, funcline.str().c_str());
             break;
         }
-        exit(-1);
     }
 
     void GL3API::gfxUseLayout(HWLayoutReference* layout)
@@ -290,7 +313,6 @@ namespace mtx::gl
 
     void GL3API::applyParamsToProgram(HWProgramReference* program)
     {
-        int usedTextureIds = 0;
         int maxTextureIds;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureIds);
         for(auto prop : m_hwParams)
@@ -322,12 +344,12 @@ namespace mtx::gl
                     glUniformMatrix4fv(uniform, 1, GL_FALSE, (float*)&prop.data);
                     break;
                 case HWT_TEXTURE:
-                    DEV_ASSERT(usedTextureIds < maxTextureIds)
+                    DEV_ASSERT(prop.data.tx.slot < maxTextureIds)
                     else
                     {
-                        glActiveTexture(GL_TEXTURE0 + usedTextureIds);
-                        glBindTexture(GL_TEXTURE_2D, ((GLTexture*)prop.data.tx)->getId());
-                        glUniform1i(uniform, usedTextureIds++);
+                        glActiveTexture(GL_TEXTURE0 + prop.data.tx.slot);
+                        glBindTexture(GL_TEXTURE_2D, ((GLTexture*)prop.data.tx.tx)->getId());
+                        glUniform1i(uniform, prop.data.tx.slot);
                     }
                     break;
                 }

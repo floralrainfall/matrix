@@ -1,0 +1,3 @@
+# Flat Shading
+inherit=materials/sm/modelbase.mmf
+glfragment=shaders/sm/flat.frag

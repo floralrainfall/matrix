@@ -13,6 +13,7 @@ namespace mtx
 
         m_sunAmbient = glm::vec3(0.25,0.25,0.25);
         m_sunDiffuse = glm::vec3(0.50,0.50,0.50);
+        m_sunSpecular = glm::vec3(0.75,0.75,0.75);
         m_sunAmbient = glm::vec3(1,1,1);
         m_sunDirection = glm::vec3(-0.5,-0.25,0.5);
     }
@@ -34,7 +35,7 @@ namespace mtx
         rp.data.v3 = m_sunSpecular;
         rp.type = HWT_VECTOR3;
         App::getHWAPI()->pushParam(rp);
-        rp.name = "sun.direction";
+        rp.name = "sun.position";
         rp.data.v3 = m_sunDirection;
         rp.type = HWT_VECTOR3;
         App::getHWAPI()->pushParam(rp);
@@ -52,7 +53,7 @@ namespace mtx
     SceneTransform::SceneTransform()
     {
         m_position = glm::vec3(0);
-        m_rotation = glm::quat();
+        m_rotation = glm::quat(1,0,0,0);
         m_scale = glm::vec3(1);
         rebuildMatrix();
     }
@@ -63,9 +64,7 @@ namespace mtx
 
         // M = S * R * T
 
-        m_matrix = m_matrix + glm::scale(m_scale);
-        m_matrix = m_matrix + glm::translate(m_position);
-        m_matrix = m_matrix + glm::toMat4(m_rotation);
+        m_matrix = glm::scale(m_scale) * glm::toMat4(m_rotation) * glm::translate(m_position);
     }
 
     SceneTransform SceneTransform::operator +(SceneTransform o)
