@@ -25,7 +25,6 @@ namespace mtx
                         DEV_MSG("received packet from unknown peer");
                         break;
                     }
-                    DEV_MSG("%s", event.packet->data);
                     if(m_listener)
                         m_listener->onReceive(this, c, event.packet);
                     enet_packet_destroy(event.packet);

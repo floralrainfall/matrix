@@ -1,4 +1,4 @@
-#pragma once
+#include <mapp.hpp>
 #include <mnet.hpp>
 #include <mscene.hpp>
 #include <mmodel.hpp>
@@ -19,7 +19,7 @@ class RDMNetListener : public mtx::NetEventListener
     int m_lastPlayerId;
     mtx::SceneManager* m_scene; 
     std::map<int, RDMPlayer*> m_players;
-    RDMPlayer m_localPlayer;
+    RDMPlayer* m_localPlayer;
 public:
     // scene should be NULL on server listener
     RDMNetListener(mtx::SceneManager* scene);

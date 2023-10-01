@@ -224,8 +224,6 @@ public:
 
         m_cameraYaw += m_eventListener->xrel * getDeltaTime();
         m_cameraPitch += m_eventListener->yrel * getDeltaTime();
-        m_eventListener->xrel = 0.f;
-        m_eventListener->yrel = 0.f;
 
         float clock = 1.5f;
         m_cameraPitch = SDL_clamp(m_cameraPitch, -clock, clock);
@@ -247,6 +245,9 @@ public:
             cameraps -= movespeed * right * (float)getDeltaTime();
         if(m_eventListener->keysDown['d'])
             cameraps += movespeed * right * (float)getDeltaTime();
+
+        m_eventListener->xrel = 0.f;
+        m_eventListener->yrel = 0.f;
 
         cameratf.setWorldMatrix(glm::lookAt(
             cameraps,

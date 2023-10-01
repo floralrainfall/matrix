@@ -4,20 +4,26 @@
 enum PacketType
 {
     RDMPAK_PLAYERINFO,
-    RDMPAK_CURRENTPLAYERINFO
+    RDMPAK_CURRENTPLAYERINFO,
+    RDMPAK_DESTROYPLAYER,
+    RDMPAK_MOTD,
 };
 
 union packetdata {
     struct {
         int playerid;
     } playerinfo;
+    struct {
+        char motd[128];
+
+    } motd;
 };
 
 RDMNetListener::RDMNetListener(mtx::SceneManager* scene)
 {
     m_scene = scene;
     m_lastPlayerId = 0;
-    m_localPlayer.playerid = -1;
+    m_localPlayer = 0;
 }
 
 void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClient* client)
@@ -26,12 +32,11 @@ void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClien
     {
         for(auto p : m_players)
         {
-            ENetPacket* playerpacket = enet_packet_create(0, sizeof(packetdata) + 1, 0);
+            ENetPacket* playerpacket = enet_packet_create(0, sizeof(packetdata::playerinfo) + 1, ENET_PACKET_FLAG_RELIABLE);
             playerpacket->data[0] = RDMPAK_PLAYERINFO;
             packetdata* pt = (packetdata*)(playerpacket->data + 1);
             pt->playerinfo.playerid = p.second->playerid;
             enet_peer_send(client->getPeer(), 0, playerpacket);
-            enet_packet_destroy(playerpacket);
         }
 
         int id = m_lastPlayerId++;
@@ -43,16 +48,24 @@ void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClien
 
         DEV_MSG("added new player %i", player->playerid);
 
-        ENetPacket* playerpacket = enet_packet_create(0, sizeof(packetdata) + 1, 0);
+        ENetPacket* playerpacket = enet_packet_create(0, sizeof(packetdata::playerinfo) + 1, ENET_PACKET_FLAG_RELIABLE);
         
         playerpacket->data[0] = RDMPAK_PLAYERINFO;
         packetdata* pt = (packetdata*)(playerpacket->data + 1);
         pt->playerinfo.playerid = player->playerid;
         enet_host_broadcast(interface->getHost(), 0, playerpacket);
 
+        playerpacket = enet_packet_create(0, sizeof(packetdata::playerinfo) + 1, ENET_PACKET_FLAG_RELIABLE);
         playerpacket->data[0] = RDMPAK_CURRENTPLAYERINFO;
+        pt = (packetdata*)(playerpacket->data + 1);
+        pt->playerinfo.playerid = player->playerid;
         enet_peer_send(client->getPeer(), 0, playerpacket);
-        enet_packet_destroy(playerpacket);
+
+        ENetPacket* motdpacket = enet_packet_create(0, sizeof(packetdata::motd) + 1, ENET_PACKET_FLAG_RELIABLE);
+        motdpacket->data[0] = RDMPAK_MOTD;
+        pt = (packetdata*)(motdpacket->data + 1);
+        strncpy(pt->motd.motd, "Welcome to the world of RDM", 128);
+        enet_peer_send(client->getPeer(), 0, motdpacket);
     }
 }
 
@@ -72,13 +85,34 @@ void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* cli
         if(!interface->getServer())
         {
             DEV_MSG("receiving player id %i", dt->playerinfo.playerid);
+            RDMPlayer* newplayer = new RDMPlayer();
+            newplayer->playerid = dt->playerinfo.playerid;
+            m_players[newplayer->playerid] = newplayer;
         }
         break;
     case RDMPAK_CURRENTPLAYERINFO:
         if(!interface->getServer())
         {
             DEV_MSG("authenticated as player id %i", dt->playerinfo.playerid);
-            m_localPlayer.playerid = dt->playerinfo.playerid;
+            try{
+                m_localPlayer = m_players.at(dt->playerinfo.playerid);
+            } catch(std::exception e)
+            {
+                DEV_MSG("could not find local player");
+            }
+        }
+        break;
+    case RDMPAK_DESTROYPLAYER:
+        if(!interface->getServer())
+        {
+            DEV_MSG("destroying player %i", dt->playerinfo.playerid);
+            m_players.erase(dt->playerinfo.playerid);
+        }
+        break;
+    case RDMPAK_MOTD:
+        if(!interface->getServer())
+        {
+            DEV_MSG("MOTD: %s", dt->motd.motd);
         }
         break;
     default:
