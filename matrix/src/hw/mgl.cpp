@@ -24,8 +24,8 @@ namespace mtx::gl
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
         HWAPI_GL->checkError();
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         if(genMipMaps)
             glGenerateMipmap(GL_TEXTURE_2D);
@@ -52,8 +52,8 @@ namespace mtx::gl
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
         HWAPI_GL->checkError();
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         if(genMipMaps)
             glGenerateMipmap(GL_TEXTURE_2D);
@@ -95,6 +95,8 @@ namespace mtx::gl
 
     void GL3API::gfxDrawElements(PrimitiveType type, HWLayoutReference* vertexLayout, int indice_count, HWBufferReference* indexBuffer, HWProgramReference* program)
     {
+        m_drawCalls++;
+
         GLuint glst = 0;
         switch(type)
         {
@@ -118,11 +120,15 @@ namespace mtx::gl
         gfxUseLayout(vertexLayout);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ((GLBuffer*)indexBuffer)->getId());
         glDrawElements(glst, indice_count, GL_UNSIGNED_INT, 0);
+
+        m_drawnVertices += indice_count;
         HWAPI_GL->checkError();
     }
 
     void GL3API::gfxDrawArrays(PrimitiveType type, HWLayoutReference* vertexLayout, int vertex_count, HWProgramReference* program)
     {
+        m_drawCalls++;
+
         GLuint glst = 0;
         switch(type)
         {
@@ -145,6 +151,8 @@ namespace mtx::gl
         
         gfxUseLayout(vertexLayout);
         glDrawArrays(glst, 0, vertex_count);
+
+        m_drawnVertices += vertex_count;
         HWAPI_GL->checkError();
     }
 

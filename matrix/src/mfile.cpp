@@ -47,7 +47,7 @@ namespace mtx
             if(f)
                 return f;
         }
-        DEV_WARN("could not open file %s mode %s", file, mode);
+        DEV_MSG("could not open file %s mode %s", file, mode);
         return NULL;
     }
 

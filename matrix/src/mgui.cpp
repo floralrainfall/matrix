@@ -40,6 +40,11 @@ namespace mtx
         popRenderProps();
     }
 
+    void GUIItemComponent::tick()
+    {
+        m_node->setOccludes(false);
+    }
+
     void GUIItemComponent::updateMesh()
     {
         createGuiMesh();

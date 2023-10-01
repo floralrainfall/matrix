@@ -1,0 +1,2 @@
+inherit=materials/bsp/bsp.mmf
+glfragment=shaders/bsp/sky.frag

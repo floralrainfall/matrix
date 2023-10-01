@@ -6,20 +6,27 @@
 
 namespace mtx
 {
-    SceneManager::SceneManager()
+    SceneManager::SceneManager(App* app)
     {
         m_rootNode = new SceneNode("Root");
         m_rootNode->m_manager = this;
+        m_rootNode->setOccludes(false);
+        m_currentApp = app;
 
         m_sunAmbient = glm::vec3(0.25,0.25,0.25);
         m_sunDiffuse = glm::vec3(0.50,0.50,0.50);
         m_sunSpecular = glm::vec3(0.75,0.75,0.75);
         m_sunAmbient = glm::vec3(1,1,1);
         m_sunDirection = glm::vec3(-0.5,-0.25,0.5);
+
+        m_tester = NULL;
+
+        app->addSceneManager(this);
     }
 
-    void SceneManager::renderScene()
+    void SceneManager::renderScene(mtx::SceneNode* viewport)
     {
+        m_currentCamera = viewport;
         m_currentRelativeTransform = SceneTransform();
 
         HWRenderParameter rp;
@@ -42,6 +49,7 @@ namespace mtx
 
         if(m_rootNode)
             m_rootNode->renderNode();
+        m_currentCamera = 0;
     }
 
     void SceneManager::tickScene()
@@ -64,7 +72,7 @@ namespace mtx
 
         // M = S * R * T
 
-        m_matrix = glm::scale(m_scale) * glm::toMat4(m_rotation) * glm::translate(m_position);
+        m_matrix = glm::translate(m_position) * glm::toMat4(m_rotation) * glm::scale(m_scale);
     }
 
     SceneTransform SceneTransform::operator +(SceneTransform o)
@@ -80,6 +88,7 @@ namespace mtx
         m_name = name;
         m_parent = NULL;
         m_manager = NULL;
+        m_occludes = true;
     }
 
     SceneNode::~SceneNode()
@@ -136,6 +145,12 @@ namespace mtx
     {
         if(!m_manager)
             return;
+        if(m_manager->m_tester && m_manager->m_currentCamera && m_occludes)
+        {
+            if(!m_manager->m_tester->test(m_manager->m_currentCamera->getTransform(),
+                                          getTransform()))
+                return;
+        }
         SceneTransform ot = m_manager->m_currentRelativeTransform;
         SceneTransform t = m_manager->m_currentRelativeTransform + m_transform;
         m_manager->m_currentRelativeTransform = t;

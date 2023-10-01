@@ -7,33 +7,55 @@ namespace mtx
 {
     HWAPI* App::m_hwApi = 0;
     FileSystem* App::m_fileSystem = 0;
+    double App::m_appStart = 0.0;
 
     App::App()
     {
         if(m_hwApi == 0)
+        {
             m_hwApi = new sdl::SDLAPI();
+
+            struct timeval timecheck;
+            gettimeofday(&timecheck, NULL);
+            m_appStart = (double)timecheck.tv_sec + ((double)timecheck.tv_usec) / 1e+6;
+        }
         if(m_fileSystem == 0)
             m_fileSystem = new FileSystem();
         m_appRunning = true;
         m_appHeadless = false;
     }
 
+    NetServer* App::newServer(ENetAddress address)
+    {
+        NetServer* s = new NetServer(address);
+        m_netInterfaces.push_back(s);
+        return s;
+    }
+
+    NetClient* App::newClient(ENetAddress address)
+    {
+        NetClient* c = new NetClient(address);
+        m_netInterfaces.push_back(c);
+        return c;
+    }
+
     int App::main()
     {
         init();
-
-        struct timeval timecheck;
-        gettimeofday(&timecheck, NULL);
-        m_appStart = (double)timecheck.tv_sec + ((double)timecheck.tv_usec) / 1e+6;
         
         if(m_windows.size() == 0)
         {                        
             m_appHeadless = true;
             m_timeTillNextAnnouncement = 0.f;
         }
+        else
+            initGfx();
 
         while(m_appRunning)
         {
+            m_appFrameStart = getExecutionTime();
+            for(auto i : m_netInterfaces)
+                i->eventFrame();
             for(auto m : m_sceneManagers)
                 m->tickScene();
             tick();
@@ -41,7 +63,6 @@ namespace mtx
 
             m_hwApi->pumpOSEvents();
 
-            m_appFrameStart = getExecutionTime();
             for(int i = 0; i < m_windows.size(); i++) {
                 Window* window = m_windows.at(i);
                 window->frame();
@@ -103,14 +124,15 @@ namespace mtx
         return (time - m_appStart);
     }
 
-    Window* App::newWindow(Viewport* vp)
+    Window* App::newWindow(Viewport* vp, HWAPI::WindowType type)
     {
         Window* nWnd = new Window();
         if(vp)
         {
             nWnd->addViewport(vp);
             glm::vec4 vp_d = vp->getViewport();
-            nWnd->m_hwWindow = getHWAPI()->newWindow((int)vp_d.z,(int)vp_d.w);           
+            nWnd->m_hwWindow = getHWAPI()->newWindow((int)vp_d.z,(int)vp_d.w,type);           
+            nWnd->m_hwWindow->setEngineWindow(nWnd);
         }
         m_windows.push_back(nWnd);
         return nWnd;
@@ -153,7 +175,7 @@ namespace mtx
                 rp.type = HWT_MATRIX4;
                 App::getHWAPI()->pushParam(rp);
 
-                viewport->getCameraNode()->getScene()->renderScene();
+                viewport->getCameraNode()->getScene()->renderScene(viewport->getCameraNode());
             }
 
             App::getHWAPI()->clearParams();

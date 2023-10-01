@@ -49,7 +49,7 @@ class ASGApp : public mtx::App
 
 public:
     virtual void init() {
-        m_sceneManager = new mtx::SceneManager();
+        m_sceneManager = new mtx::SceneManager(this);
         m_viewport = new mtx::Viewport(640, 480);
         m_viewport->setClearColor(glm::vec4(0,0,0,0));
         m_window = newWindow(m_viewport);

@@ -1,0 +1,2 @@
+glvertex=shaders/bsp/bsp.vert
+glfragment=shaders/bsp/bsp.frag

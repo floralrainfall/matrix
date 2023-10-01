@@ -3,6 +3,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <mmaterial.hpp>
+#include <map>
 #include <glm/glm.hpp>
 
 namespace mtx
@@ -36,10 +37,12 @@ namespace mtx
     class ModelComponent : public SceneComponent
     {
         ModelData* m_modelData;
+        std::map<int, HWTextureReference*> m_textureOverrides;
     public:
         ModelComponent(const char* model = 0);
         void setModel(const char* model);
 
+        void setTextureOverride(int id, HWTextureReference* ov) { m_textureOverrides[id] = ov; }
         ModelData* getModelData() { return m_modelData; }
 
         virtual void renderComponent();

@@ -19,6 +19,6 @@ void main()
     vec4 pos = pv * model * vec4(v_position, 1.0);
     gl_Position = pos;
     v_fcolor = vec4(0.5,0.5,0.5,1.0);
-    v_fnormal = v_normal;
+    v_fnormal = mat3(transpose(inverse(model))) * v_normal;
     v_fuv = v_uv;
 }

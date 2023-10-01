@@ -50,8 +50,7 @@ class NRSimApp : public mtx::App
     mtx::BSPFile* bsp;
 public:
     virtual void init() {
-        m_sceneManager = new mtx::SceneManager();
-        addSceneManager(m_sceneManager);
+        m_sceneManager = new mtx::SceneManager(this);
         m_viewport = new mtx::Viewport(640, 480);
         m_viewport->setClearColor(glm::vec4(0.4,0.4,0.4,1));
         m_window = newWindow(m_viewport);

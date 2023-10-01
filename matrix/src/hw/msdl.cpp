@@ -29,10 +29,30 @@ namespace mtx::sdl
     void SDLAPI::pumpOSEvents()
     {
         SDL_Event e;
+        m_drawnVertices = 0;
+        m_drawCalls = 0;
+        SDLWindow* window = NULL;
+        
         while(SDL_PollEvent(&e))
         {
             switch(e.type)
             {
+            case SDL_WINDOWEVENT:
+                window = m_windows[e.window.windowID];                
+                if(!window)
+                    break;
+                switch(e.window.event)
+                {
+                case SDL_WINDOWEVENT_CLOSE:
+                    for(auto listener : getListeners())
+                        listener->onWindowClose(window->getEngineWindow());
+                    break;
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                    for(auto listener : getListeners())
+                        listener->onWindowSize(e.window.data1, e.window.data2, window->getEngineWindow());
+                    break;
+                }
+                break;
             case SDL_QUIT:
                 for(auto listener : getListeners())
                     listener->onQuit();
@@ -44,6 +64,30 @@ namespace mtx::sdl
             case SDL_KEYUP: 
                 for(auto listener : getListeners())
                     listener->onKeyUp(e.key.keysym.sym);
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                window = m_windows[e.button.windowID];
+                if(!window)
+                    break;
+                for(auto listener : getListeners())
+                    listener->onMouseDown(e.button.x, e.button.y, window->getEngineWindow());
+                break;
+            case SDL_MOUSEBUTTONUP:
+                window = m_windows[e.button.windowID];
+                if(!window)
+                    break;
+                for(auto listener : getListeners())
+                    listener->onMouseUp(e.button.x, e.button.y, window->getEngineWindow());
+                break;
+            case SDL_MOUSEMOTION:
+                window = m_windows[e.motion.windowID];
+                if(!window)
+                    break;
+                for(auto listener : getListeners())
+                {
+                    listener->onMouseMove(e.motion.x, e.motion.y, window->getEngineWindow());
+                    listener->onMouseMoveRel(e.motion.xrel, e.motion.yrel, window->getEngineWindow());
+                }
                 break;
             }
         }
@@ -71,15 +115,16 @@ namespace mtx::sdl
         SDL_ShowSimpleMessageBox(flags, title, message, window);
     }
 
-    HWWindowReference* SDLAPI::newWindow(int resX, int resY)
+    HWWindowReference* SDLAPI::newWindow(int resX, int resY, WindowType type)
     {
         SDLWindow* wref = new SDLWindow();
-        wref->createWindow(glm::ivec2(resX, resY));
+        wref->createWindow(glm::ivec2(resX, resY), (int)type);
         if(!m_firstWindow)
         {
             m_firstWindow = wref;
             showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLAPI by Ryelow <endoh@endoh.ca>");
         }
+        m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
         return (HWWindowReference*)wref;
     }
 
@@ -91,7 +136,7 @@ namespace mtx::sdl
             SDL_DestroyWindow(m_sWind);
     }
 
-    void SDLWindow::createWindow(glm::ivec2 size)
+    void SDLWindow::createWindow(glm::ivec2 size, int type)
     {
         m_windowSize = size;
 
@@ -102,14 +147,44 @@ namespace mtx::sdl
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-        m_sWind = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x, size.y, SDL_WINDOW_OPENGL);
+        int wflags = SDL_WINDOW_OPENGL;
+        switch((HWAPI::WindowType)type)
+        {
+        case HWAPI::HWWT_FULLSCREEN:
+            wflags |= SDL_WINDOW_FULLSCREEN;
+            break;
+        case HWAPI::HWWT_NORMAL_RESIZABLE:
+            wflags |= SDL_WINDOW_RESIZABLE;
+            break;
+        default:
+            break;
+        }
+
+        m_sWind = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x, size.y, wflags);
+
 
         if(!m_glCtxt)
             m_glCtxt = SDL_GL_CreateContext(m_sWind);
         gladLoadGLLoader(SDL_GL_GetProcAddress);
 
-        SDL_GL_SetSwapInterval(0);
+        SDL_GL_MakeCurrent(m_sWind, m_glCtxt);
 
+        bool usevsync = false;
+
+        if(usevsync)
+        {
+            int r = SDL_GL_SetSwapInterval(-1);
+            if(r == -1)
+            {
+                DEV_MSG("OpenGL doesnt support adaptive vsync");
+                SDL_GL_SetSwapInterval(1);
+            }
+            else 
+                DEV_MSG("using adaptive vsync");
+        }
+        else
+            SDL_GL_SetSwapInterval(0);
+            
         DEV_MSG("OpenGL loaded");
         DEV_MSG("vendor: %s", glGetString(GL_VENDOR))
         DEV_MSG("renderer: %s", glGetString(GL_RENDERER));
@@ -122,6 +197,15 @@ namespace mtx::sdl
         glDepthFunc(GL_LESS);  
 
         glEnable(GL_CULL_FACE);
+    }
+
+    void SDLWindow::setGrab(bool grab)
+    {
+        SDL_bool _g = SDL_FALSE;
+        if(grab)
+            _g = SDL_TRUE;
+        SDL_SetWindowGrab(m_sWind, _g);
+        SDL_SetRelativeMouseMode(_g);
     }
 
     void SDLWindow::setWindowTitle(const char* title)

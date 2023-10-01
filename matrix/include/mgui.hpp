@@ -36,6 +36,7 @@ namespace mtx
         void setColor(glm::vec4 color) { m_color = color; }
         void updateMesh();
         virtual void renderComponent();
+        virtual void tick();
         virtual std::string className() { return "GUIItemComponent"; }
     };
 

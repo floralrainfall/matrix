@@ -8,5 +8,8 @@ uniform vec4 color;
 
 void main()
 {
-    f_color = texture2D(texture, v_fuv) * color;
+    vec4 samp = texture2D(texture, v_fuv);
+    if(samp.a == 0)
+        discard;
+    f_color = samp * color;
 } 

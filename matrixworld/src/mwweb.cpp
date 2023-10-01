@@ -235,9 +235,8 @@ namespace mtx::world
 
     void WebService::addToApp(App* app)
     {
-        m_sceneManager = new SceneManager();
+        m_sceneManager = new SceneManager(app);
         m_eventListener = new WebServiceListener(this);
-        app->addSceneManager(m_sceneManager);
         App::getHWAPI()->addListener(m_eventListener);
     }
 }

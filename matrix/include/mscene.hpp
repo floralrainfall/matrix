@@ -29,11 +29,15 @@ namespace mtx
 
         SceneTransform operator +(SceneTransform o);
     };
+
+    class App;
     
     class SceneManager
     {
         friend class SceneNode;
         SceneNode* m_rootNode;
+        SceneNode* m_currentCamera;
+        App* m_currentApp;
 
         SceneTransform m_currentRelativeTransform;
 
@@ -41,12 +45,30 @@ namespace mtx
         glm::vec3 m_sunDiffuse;
         glm::vec3 m_sunSpecular;
         glm::vec3 m_sunDirection;
+    
     public:
-        SceneManager();
+        SceneManager(App* app);
 
-        void renderScene();
+        void setSunAmbient(glm::vec3 ambient) { m_sunAmbient = ambient; }
+        void setSunDiffuse(glm::vec3 diffuse) { m_sunDiffuse = diffuse; }
+        void setSunSpecular(glm::vec3 specular) { m_sunSpecular = specular; }
+        void setSunDirection(glm::vec3 direction) { m_sunDirection = direction; }
+
+        App* getApp() { return m_currentApp; }
+        void renderScene(mtx::SceneNode* viewport);
         void tickScene();
         SceneNode* getRootNode() { return m_rootNode; }
+
+        class SceneOcclusionTester
+        {
+        public:
+            // true 
+            virtual bool test(SceneTransform a, SceneTransform b) { return true; }
+        };
+    private:
+        SceneOcclusionTester* m_tester;
+    public:
+        void setOcclusionTester(SceneOcclusionTester* tester) { m_tester = tester; }
     };
 
     class SceneComponent
@@ -78,6 +100,7 @@ namespace mtx
         SceneManager* m_manager;
         SceneTransform m_transform;
         std::string m_name;
+        bool m_occludes;
 
         void addNewChild(SceneNode* node);
         void removeChild(SceneNode* node);
@@ -98,5 +121,6 @@ namespace mtx
 
         void tickNode();
         void renderNode();
+        void setOccludes(bool o) { m_occludes = o; }
     };
 };

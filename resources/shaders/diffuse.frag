@@ -13,11 +13,12 @@ struct light
     vec3 position;
 };
 
+uniform mat4 model = mat4(1);
 #define MAX_LIGHTS 8
 uniform light sun;
 uniform light lights[MAX_LIGHTS];
 uniform int lights_on = 0;
-uniform int specular_k = 32;
+uniform int specular_k = 16;
 uniform vec3 view_position;
 
 uniform sampler2D texture0;
@@ -43,7 +44,7 @@ vec3 calculateSunLight(light _light)
 {
     float sun_dist = 500.0;
     vec3 norm = normalize(v_fnormal);
-    vec3 light_dir = normalize(_light.position * sun_dist - v_fmpos);
+    vec3 light_dir = normalize((v_fmpos + _light.position) - v_fmpos);
     float diff = max(dot(norm, light_dir), 0.0);
     vec3 diffuse = diff * sun.diffuse;
 

@@ -20,19 +20,21 @@ namespace mtx
     public:
         Viewport(int resx, int resy);
 
-        void setFarDistance(float dist) { m_farDistance = dist; updateView(); }
-        void setNearDistance(float dist) { m_nearDistance = dist; updateView(); }
+        void setFarDistance(float dist) { m_farDistance = dist; updatePerspective(); }
+        void setNearDistance(float dist) { m_nearDistance = dist; updatePerspective(); }
         void beginViewportFrame();
         void setCameraNode(SceneNode* cameraNode) { m_cameraNode = cameraNode; };
         SceneNode* getCameraNode() { return m_cameraNode; }
         glm::vec4& getViewport() { return m_viewport; }
 
         void updateView();
+        void updatePerspective();
 
         void setClearColor(glm::vec4 clear) { m_clearColor = clear; };
         void setPerspective(glm::mat4 m) { m_perspectiveMatrix = m; }
         glm::mat4& getPerspective() { return m_perspectiveMatrix; }
         void setView(glm::mat4 m) { m_viewMatrix = m; }
+        void setViewport(glm::vec4 viewport) { m_viewport = viewport; }
         glm::mat4& getView() { return m_viewMatrix; }
     };
 }

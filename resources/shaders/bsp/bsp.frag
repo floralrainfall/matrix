@@ -20,7 +20,7 @@ uniform sampler2D lightmap;
 
 void main()
 {
-    vec4 samplet = texture2D(surface, v_fuv);
+    vec4 samplet = texture2D(surface, vec2(v_fuv.x, -v_fuv.y));
     vec4 samplel = texture2D(lightmap, v_flm_uv);
 
     vec3 result = samplet.xyz * samplel.xyz;

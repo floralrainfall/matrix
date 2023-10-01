@@ -99,21 +99,25 @@ namespace mtx
     protected:
         glm::ivec2 m_windowSize;
         HWTextureReference* m_hwTexture;
+        Window* m_engineWindow;
         std::clock_t m_frameBegin;
         float m_deltaTime;
     public:
         virtual ~HWWindowReference();
 
+        void setEngineWindow(Window* window) { m_engineWindow = window; }
+
         glm::ivec2 getWindowSize() { return m_windowSize; }
         HWTextureReference* getHwTexture() { return m_hwTexture; }
-
+        Window* getEngineWindow() { return m_engineWindow; }
         float getDeltaTime() { return m_deltaTime; }
 
-        virtual void createWindow(glm::ivec2 size) = 0;
+        virtual void createWindow(glm::ivec2 size, int type) = 0;
         virtual void setWindowTitle(const char* title) {}
         virtual void pumpOSEvents(Window* ewnd) {}
         virtual void beginFrame() = 0;
         virtual void endFrame() = 0;
+        virtual void setGrab(bool grab) {};
     };
 
     // this is modeled after opengl cause idk how directx does it
@@ -154,6 +158,9 @@ namespace mtx
     protected:
         std::map<std::string, HWTextureReference*> m_cachedTextures;
         std::deque<HWRenderParameter> m_hwParams; // when anything is drawn, these are applied as uniforms in OpenGL's case
+
+        int m_drawnVertices;
+        int m_drawCalls;
     public:
         virtual void shutdown() = 0; // remove for example the GL context
 
@@ -191,7 +198,15 @@ namespace mtx
         virtual HWTextureReference* newTexture() = 0;
         virtual HWProgramReference* newProgram() = 0;
         virtual HWLayoutReference* newLayout() = 0;
-        virtual HWWindowReference*  newWindow(int resX, int resY) = 0;
+
+        enum WindowType
+        {
+            HWWT_NORMAL,
+            HWWT_NORMAL_RESIZABLE,
+            HWWT_FULLSCREEN,
+        };
+
+        virtual HWWindowReference*  newWindow(int resX, int resY, WindowType type = HWWT_NORMAL) = 0;
 
         HWTextureReference* loadCachedTexture(const char* texture, bool autoload = true);
         void addTextureToCache(HWTextureReference* texture, const char* name);
@@ -202,11 +217,22 @@ namespace mtx
             virtual void onQuit() = 0;
             virtual void onKeyDown(int key) = 0;
             virtual void onKeyUp(int key) = 0;
+
+            virtual void onWindowClose(Window* window) {};
+            virtual void onWindowSize(int w, int h, Window* window) {};
+
+            virtual void onMouseDown(int x, int y, Window* window) {};
+            virtual void onMouseUp(int x, int y, Window* window) {};
+            virtual void onMouseMove(int x, int y, Window* window) {};
+            virtual void onMouseMoveRel(int x, int y, Window* window) {};
         };
 
         std::vector<EventListener*> getListeners() { return m_listeners; }
         void addListener(EventListener* listener);
         virtual void pumpOSEvents() = 0;
+
+        int getDrawnVertices() { return m_drawnVertices; }
+        int getDrawCalls() { return m_drawCalls; }
     private:
         std::vector<EventListener*> m_listeners;
     };

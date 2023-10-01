@@ -14,8 +14,9 @@ namespace mtx::sdl
         virtual ~SDLWindow();
 
         SDL_Window* getSDLRef() { return m_sWind; }
+        virtual void setGrab(bool grab);
 
-        virtual void createWindow(glm::ivec2 size);
+        virtual void createWindow(glm::ivec2 size, int type);
         virtual void setWindowTitle(const char* title);
         virtual void beginFrame();
         virtual void endFrame();
@@ -24,12 +25,13 @@ namespace mtx::sdl
     class SDLAPI : public mtx::gl::GL3API
     {
         SDLWindow* m_firstWindow;
+        std::map<unsigned int, SDLWindow*> m_windows;
     public:
         SDLAPI();
         virtual void shutdown();
         virtual void showMessageBox(const char* title, const char* message, MessageBoxType type = HWMBT_INFORMATION);
         virtual void pumpOSEvents();
         
-        virtual HWWindowReference* newWindow(int resX, int resY);
+        virtual HWWindowReference* newWindow(int resX, int resY, WindowType type);
     };
 }
