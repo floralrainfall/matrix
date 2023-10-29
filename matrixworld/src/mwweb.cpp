@@ -39,6 +39,7 @@ namespace mtx::world
         initCurl();
         m_sceneManager = 0;
         m_eventListener = 0;
+	m_currentUser = 0;
 
         if(!m_cfg.getFound())
             DEV_WARN("could not load WebService config file %s", cfg);
@@ -61,9 +62,9 @@ namespace mtx::world
             std::string token = logincfg.getValue("user_token");
             if(token != "null")
             {
-                std::string username = logincfg.getValue("user_username");
+                std::string email = logincfg.getValue("user_email");
                 WebServiceResponse loginresp = postSync("auth/authorize", {
-                    {"username", username},
+                    {"email", email},
                     {"token", token}
                 });
                 if(loginresp.httpcode != 200)               
@@ -73,14 +74,18 @@ namespace mtx::world
                 else
                 {
                     picojson::value v;
-                    std::string err = picojson::parse(v, loginresp.response);
+                    std::string err = picojson::parse(v,
+						      loginresp.response);
+
                     if(!err.empty())
-                        DEV_WARN(err.c_str())
+			DEV_WARN(err.c_str())
                     else
                     {
                         DEV_MSG("logged in");
-                        m_authkey = v.get("key").get<std::string>();
-                        m_currentUser = new User((int)v.get("id").get<double>(), this);
+			picojson::value k = v.get("key");
+			m_nextAuthRenew = v.get("renew_in").get<double>();
+                        m_authkey = k.get("key").get<std::string>();
+                        m_currentUser = new User((int)k.get("user_id").get<double>(), this);
                         DEV_MSG("username: %s", m_currentUser->getUsername().c_str());
                     }
                 }
@@ -169,7 +174,7 @@ namespace mtx::world
         {
             curl_mimepart* part = curl_mime_addpart(mp);
             curl_mime_name(part, k.c_str());
-            curl_mime_data(part, v.c_str(), CURL_ZERO_TERMINATED);
+            curl_mime_data(part, v.c_str(), CURL_ZERO_TERMINATED); 
         }
 
         curl_easy_setopt(pc, CURLOPT_MIMEPOST, mp);
@@ -213,7 +218,7 @@ namespace mtx::world
             WebServiceResponse rsp = getSync(url);
             if(rsp.httpcode != 200)
             {
-                DEV_WARN("unable to get web texture %s", url);
+                DEV_WARN("unable to get web texture %s (%s)", url, rsp.response);
                 return NULL;
             }
             rf->uploadCompressedTexture(rsp.size, rsp.response);
@@ -229,14 +234,94 @@ namespace mtx::world
         if(path.substr(0,http.size()) == http)
             url = path;
         else
-            url = m_httpbase + "/" + url;
+            url = m_httpbase + "/" + path;
         return url;
     }
 
     void WebService::addToApp(App* app)
     {
+	m_app = app;
         m_sceneManager = new SceneManager(app);
         m_eventListener = new WebServiceListener(this);
+	m_nextAuthRenew = app->getExecutionTime() + m_nextAuthRenew;
         App::getHWAPI()->addListener(m_eventListener);
+    }
+
+    void WebService::postServerStatus(WebServiceServerStatus status,
+				      WebServiceClientToken token)
+    {
+	if(!token.server)
+	{
+	    DEV_MSG("attempt to announce on a non-server token");
+	    return;
+	}
+	    
+	char hn[128];
+	int r = enet_address_get_host(&status.address, hn, 128);
+	if(r < 0)
+	    enet_address_get_host_ip(&status.address, hn, 128);
+	WebServiceResponse rsp = postSync("server/update", {
+		{"name",status.name},
+		{"desc",status.desc},
+		{"game",status.game},
+		{"player_count",std::to_string(status.player_count)},
+		{"player_max",std::to_string(status.player_max)},
+		{"server_ip",hn},
+		{"server_port",std::to_string(status.address.port)},
+		{"auth_key",m_authkey},
+		{"token",token.token}
+	    });
+	if(rsp.httpcode != 200)
+	{
+	    DEV_MSG("couldnt announce server, r: %i, msg: %s",
+		    rsp.httpcode, rsp.response);
+	}
+	else
+	{
+	    DEV_MSG("announced server (200 OK)");
+	}
+    }
+
+    WebServiceClientToken WebService::generateClientToken(bool server)
+    {
+	WebServiceClientToken tk;
+	tk.valid = false;
+	WebServiceResponse rsp = postSync("auth/newtoken", {
+		{"auth_key",m_authkey},
+		{"server",std::to_string(server)}
+	    });
+	if(rsp.httpcode != 200)
+	{
+	    DEV_MSG("couldnt get client token, r: %i, msg: %s",
+		    rsp.httpcode, rsp.response);
+	}
+	else
+	{
+	    picojson::value v;
+	    std::string err = picojson::parse(v, rsp.response);
+	    if(!err.empty())
+		DEV_WARN(err.c_str())
+	    else
+	    {
+		tk.token = v.get("key").get<std::string>();
+		tk.server = server;
+		tk.renewAt = v.get("renew_at").get<double>();
+		tk.valid = true;
+	    }
+	}
+	return tk;
+    }
+
+   
+
+    void WebService::doMyThang()
+    {
+	if(m_app)
+	{
+	    if(m_app->getExecutionTime() > m_nextAuthRenew)
+	    {
+		// TODO: renew
+	    }
+	}
     }
 }

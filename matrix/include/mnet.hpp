@@ -24,6 +24,7 @@ namespace mtx
         NetEventListener* m_listener;
         std::vector<NetClient*> m_remoteClients;
         bool m_server;
+        bool m_online;
         void* m_userData;
         void setHostSettings(ENetHost* peer);
     public:
@@ -31,6 +32,7 @@ namespace mtx
         void setEventListener(NetEventListener* listener) { m_listener = listener; }
         void eventFrame();
         bool getServer() { return m_server; }
+	bool getOnline() { return m_online; }
 
         ENetHost* getHost() { return m_peer; }
         void* getUserData() { return m_userData; }
@@ -51,7 +53,9 @@ namespace mtx
     public:
         ENetPeer* getPeer() { return m_clientPeer; }
         // use App::newClient
-        NetClient(ENetAddress address);
+        NetClient();
         NetClient(ENetPeer* peer);
+
+        void tryConnect(ENetAddress address);
     };
 }

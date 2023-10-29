@@ -4,10 +4,12 @@
 #include <mhwabs.hpp>
 #include <mapp.hpp>
 
+#define MSG_BUF_SIZE 1024
+
 namespace mtx
 {
-    static char tmp_dev_msg_buf[512] = {0};
-    static char tmp_dev_msg_buf2[512] = {0};
+    static char tmp_dev_msg_buf[MSG_BUF_SIZE] = {0};
+    static char tmp_dev_msg_buf2[MSG_BUF_SIZE] = {0};
 }
 
 #define DEV_MSG_FORMAT "%s:%i: %s\n", __BASE_FILE__, __LINE__

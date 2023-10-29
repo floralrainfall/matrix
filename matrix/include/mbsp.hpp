@@ -179,13 +179,15 @@ namespace mtx
         int m_facesRendered;
         int m_leafsRendered;
 
+	HWTextureReference* m_skybox;
+
         void readEntitesLump(BSPDirentry* dirent);
-        void addLeafFaces(BSPLeaf* leaf);
-        void parseTreeNode(BSPNode* node);
+        void addLeafFaces(BSPLeaf* leaf, bool brush, bool leafface);
+        void parseTreeNode(BSPNode* node, bool brush, bool leafface);
         BSPFaceModel addFaceModel(BSPFace* face);
         void renderFaceModel(BSPFaceModel* model, HWProgramReference* program);
     public:
-        BSPFile(const char* bsp, bool gfx = true);
+        BSPFile(const char* bsp);
         HWLayoutReference* createModelLayout();
         void addToPhysicsWorld(PhysicsWorld* world);
         bool getUsingVis() { return m_useVis; }
@@ -197,9 +199,12 @@ namespace mtx
         int getLeafsTotal() { return m_leafs.size(); }
         void hwapiDraw(HWProgramReference* program);
         void updatePosition(glm::vec3 new_pos);
+	void setSkybox(HWTextureReference* skybox);
         int getCluster(glm::vec3 p);
         bool canSeeCluster(int x, int y);
         bool canSee(glm::vec3 x, glm::vec3 y);
+
+        void initGfx();
     };
 
     // wrapper for BSPFiles to be rendered within a scene

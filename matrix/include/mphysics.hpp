@@ -60,6 +60,7 @@ namespace mtx
     public:
         PhysicsWorld();
 
+        virtual std::string className() { return "PhysicsWorld"; }
         void setGravity(btVector3 v = {0, 0, -10});
         void addStaticObject(btCollisionObject* shape);
         void addRigidBody(btRigidBody* body);
@@ -78,6 +79,7 @@ namespace mtx
         void setTransform(const btTransform tf) { m_body->setWorldTransform(tf); }
         void addToWorld(PhysicsWorld* world);
 
+	virtual std::string className() { return "RigidBody"; }
         virtual void tick();
     };
 }

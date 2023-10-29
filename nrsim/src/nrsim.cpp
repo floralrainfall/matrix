@@ -49,6 +49,11 @@ class NRSimApp : public mtx::App
     float m_fuelRods[8]; // 0.0 - depleted - 1.0 full
     mtx::BSPFile* bsp;
 public:
+    NRSimApp(int argc, char** argv) : App(argc, argv)
+    {
+
+    }
+    
     virtual void init() {
         m_sceneManager = new mtx::SceneManager(this);
         m_viewport = new mtx::Viewport(640, 480);
@@ -63,7 +68,7 @@ public:
         cameraNode->setParent(m_sceneManager->getRootNode());
         m_viewport->setCameraNode(cameraNode);
 
-        m_diffuse = mtx::Material::getMaterial("materials/diffuse.mmf");
+        /*m_diffuse = mtx::Material::getMaterial("materials/diffuse.mmf");
 
         mtx::SceneNode* guiNode = new mtx::SceneNode();
         m_guiShipStatus = new mtx::GUITextComponent();
@@ -79,10 +84,11 @@ public:
         mtx::MaterialComponent* reactorMaterial = new mtx::MaterialComponent(m_diffuse);
         reactorNode->addComponent(reactorModel);
         reactorNode->addComponent(reactorMaterial);
-        reactorNode->setParent(m_sceneManager->getRootNode());
+        reactorNode->setParent(m_sceneManager->getRootNode());*/
     }
 
     virtual void tick() {
+	/*
         mtx::SceneTransform cameratf = cameraNode->getTransform();
         cameratf.setWorldMatrix(glm::lookAt(
             glm::vec3(10,0,-3),
@@ -95,15 +101,13 @@ public:
         if(m_eventListener->keysDown['<'])
         {
             
-        }
+        }*/
     } 
 };
 
 int main(int argc, char** argv)
 {
-    NRSimApp app = NRSimApp();
-    
-    app.initParameters(argc, argv);
+    NRSimApp app = NRSimApp(argc, argv);
 
     return app.main();
 }

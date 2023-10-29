@@ -100,6 +100,7 @@ namespace mtx
     MaterialComponent::MaterialComponent(Material* material)
     {
         m_material = material;
+	m_color = glm::vec4(1,1,1,1);
         m_kSpecular = 8;
     }
 
@@ -112,7 +113,14 @@ namespace mtx
         rp.name = "specular_k";
         rp.type = HWT_INT;
         rp.data.i = m_kSpecular;
-        App::getHWAPI()->pushParam(rp);
+
+	App::getHWAPI()->pushParam(rp);
+
+        rp.name = "color";
+        rp.type = HWT_VECTOR4;
+        rp.data.v4 = m_color;
+
+	App::getHWAPI()->pushParam(rp);
     }
 
     void MaterialComponent::updateFromModelComponent()
@@ -153,5 +161,6 @@ namespace mtx
         if(!m_material)
             return;
         App::getHWAPI()->popParam();
+	App::getHWAPI()->popParam();
     }
 }

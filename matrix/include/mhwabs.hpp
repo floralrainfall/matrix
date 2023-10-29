@@ -4,6 +4,7 @@
 #include <ctime>
 #include <vector>
 #include <string>
+#include <functional>
 #include <map>
 
 namespace mtx
@@ -25,6 +26,12 @@ namespace mtx
         HWT_MATRIX3,
         HWT_MATRIX4,
         HWT_TEXTURE
+    };
+
+    enum HWTextureType
+    {
+	HWTT_TEXTURE2D,
+	HWTT_TEXTURE_CUBEMAP
     };
 
     class HWTextureReference;
@@ -75,21 +82,25 @@ namespace mtx
     public:
         virtual ~HWBufferReference();
 
+	// the data should be copied to the gpu, you can deallocate data
         virtual void upload(int size, void* data) = 0;
+
     };
 
     class HWTextureReference
     {
     protected:
         glm::ivec2 m_textureSize;
+	HWTextureType m_type;
     public:
         virtual ~HWTextureReference();
 
         glm::ivec2 getTextureSize() { return m_textureSize; }
-        
+
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
         virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
         bool uploadCompressedTexture(int size, void* data);
+    	void setTextureType(HWTextureType type) { m_type = type; };
     };
 
     class Window;
@@ -185,18 +196,86 @@ namespace mtx
             HWMBT_INFORMATION,
         };
 
-        virtual void showMessageBox(const char* title, const char* message, MessageBoxType type = HWMBT_INFORMATION) {};
+	/**
+	 * Shows a simple OK message box to the user.
+	 *
+	 * @param title Title of the message box
+	 * @param message Message within the box
+	 * @param type Which 'type' (picture of message icon) is used
+	 */
+        virtual void showMessageBox(const char* title,
+				    const char* message,
+				    MessageBoxType type =
+				    HWMBT_INFORMATION) = 0;
 
+	/**
+	 * Sets the viewport in which the renderer renders into.
+	 *
+	 * @param viewport The rectangle, z being width and w being
+	 * height
+	 */
         virtual void gfxViewport(glm::vec4 viewport) =0;
+
+	/**
+	 * Clears the color buffer with specified color
+	 */
         virtual void gfxClear(glm::vec4 color) = 0;
+	/**
+	 * Clears the depth buffer with the specified depth
+	 */
         virtual void gfxClearDepth(float depth) = 0;
-        virtual void gfxDrawElements(PrimitiveType type, HWLayoutReference* vertexLayout, int indice_count, HWBufferReference* indexBuffer, HWProgramReference* program = 0) = 0;
+	/**
+	 * Draws a list of elements to the screen
+	 *
+	 * @param type Type of primitive used
+	 * @param vertexLayout The layout the vertex buffer is
+	 * arranged in
+	 * @param indice_count The number of elements to render
+	 * @param indexBuffer The buffer of indices to use
+	 * @param program The program to render with
+	 */
+        virtual void gfxDrawElements(PrimitiveType type,
+				     HWLayoutReference* vertexLayout, int indice_count,
+				     HWBufferReference* indexBuffer, HWProgramReference* program
+				     = 0) = 0;
+	/**
+	 * Draws an array of primitives to the screen
+	 *
+	 * It is recommended you use mtx::HWAPI::gfxDrawElements instead.
+	 *
+	 * @param type The type of primitive used
+	 * @param vertexLayout The layout of the vertex buffer
+	 * @param vertex_count The number of vertices within the
+	 * buffer
+	 * @param program The program to use
+	 */
         virtual void gfxDrawArrays(PrimitiveType type, HWLayoutReference* vertexLayout, int vertex_count, HWProgramReference* program = 0) = 0;
         virtual void gfxUseLayout(HWLayoutReference* layout) = 0;
 
+	/**
+	 * Creates a new GPU buffer reference.
+	 */
         virtual HWBufferReference* newBuffer() = 0;
+	/**
+	 * Creates a new GPU texture reference
+	 *
+	 * It is recommended you use mtx::HWAPI::loadCachedTexture instead, if
+	 * you're simply trying to use a texture stored on disk. Even
+	 * if its not cached yet, it will cache it for you. This
+	 * creates a texture reference only.
+	 */
         virtual HWTextureReference* newTexture() = 0;
+	/**
+	 * Creates a new GPU program reference
+	 *
+	 * It is recommended you use the mtx::Material system. That caches
+	 * program's and automatically deals with linking them together
+	 * for you. See mtx::Material::getMaterial
+	 */
         virtual HWProgramReference* newProgram() = 0;
+	/**
+	 * Creates a new GPU layout reference
+	 */
         virtual HWLayoutReference* newLayout() = 0;
 
         enum WindowType
@@ -206,9 +285,34 @@ namespace mtx
             HWWT_FULLSCREEN,
         };
 
-        virtual HWWindowReference*  newWindow(int resX, int resY, WindowType type = HWWT_NORMAL) = 0;
+	/**
+	 * Creates a new window visible to the user for rendering in.
+	 * You probably want to use mtx::App::newWindow instead, as that
+	 * manages initializing the viewport automatically for you,
+	 * and giving you an easier to work with mtx::Window class,
+	 * rather then a mtx::HWWindowReference.
+	 * 
+	 * @param resX The X resolution of the window (can be changed)
+	 * @param resY The Y resolution of the window (can be changed)
+	 * @param type The type of the window (can be resizable, or fullscreen)
+	 */
+        virtual HWWindowReference* newWindow(int resX, int resY, WindowType type = HWWT_NORMAL) = 0;
 
-        HWTextureReference* loadCachedTexture(const char* texture, bool autoload = true);
+	/**
+	 * Loads a texture from the cache
+	 *
+	 * @param texture Texture name. If autoload is true, it will
+	 * load this texture from the disk
+	 * @param autoload Automatically loads the texture if it
+	 * doesnt exist. Otherwise, return NULL if not found
+	 */
+        HWTextureReference* loadCachedTexture(const char* texture,
+					      bool autoload = true);
+	/**
+	 * Adds a texture to the cache. This is if you load a texture
+	 * from somewhere other then disk, but still want
+	 * mtx::HWAPI::loadCachedTexture to work.
+	 */
         void addTextureToCache(HWTextureReference* texture, const char* name);
 
         class EventListener
@@ -236,4 +340,11 @@ namespace mtx
     private:
         std::vector<EventListener*> m_listeners;
     };
+
+    typedef std::function<HWAPI*()> HWAPIConstructor;
+    template<typename T>
+    T* HWAPIConstructorDefault()
+    {
+	return new T();
+    }
 };

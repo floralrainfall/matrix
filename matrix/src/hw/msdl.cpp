@@ -1,11 +1,10 @@
 #include <hw/msdl.hpp>
 #include <mapp.hpp>
 #include <mdev.hpp>
-#include <glad/glad.h>
 
 namespace mtx::sdl
 {
-    SDLAPI::SDLAPI() : GL3API()
+    SDLAPI::SDLAPI() : mtx::HWAPI()
     {
         DEV_MSG("initialized SDLAPI");
 
@@ -13,17 +12,6 @@ namespace mtx::sdl
 
         if(SDL_Init(SDL_INIT_VIDEO) < 0)
             DEV_WARN("couldnt initialize SDL");
-
-        SDL_GL_LoadLibrary(NULL);
-    }
-
-    void SDLAPI::shutdown()
-    {
-        if(SDLWindow::m_glCtxt)
-        {
-            SDL_GL_DeleteContext(SDLWindow::m_glCtxt);
-            SDLWindow::m_glCtxt = 0;
-        }
     }
     
     void SDLAPI::pumpOSEvents()
@@ -115,28 +103,42 @@ namespace mtx::sdl
         SDL_ShowSimpleMessageBox(flags, title, message, window);
     }
 
-    HWWindowReference* SDLAPI::newWindow(int resX, int resY, WindowType type)
-    {
-        SDLWindow* wref = new SDLWindow();
-        wref->createWindow(glm::ivec2(resX, resY), (int)type);
-        if(!m_firstWindow)
-        {
-            m_firstWindow = wref;
-            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLAPI by Ryelow <endoh@endoh.ca>");
-        }
-        m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
-        return (HWWindowReference*)wref;
-    }
-
-    SDL_GLContext SDLWindow::m_glCtxt = 0;
-
     SDLWindow::~SDLWindow()
     {
         if(m_sWind)
             SDL_DestroyWindow(m_sWind);
     }
+    
+#ifdef GL_ENABLED
+    SDL_GLContext SDLGLWindow::m_glCtxt = 0;
+    SDLGLAPI::SDLGLAPI() : SDLAPI()
+    {
+	DEV_MSG("initialized SDLAPI... GL flavour");
+    }
 
-    void SDLWindow::createWindow(glm::ivec2 size, int type)
+    void SDLGLAPI::shutdown()
+    {
+        if(SDLGLWindow::m_glCtxt)
+        {
+            SDL_GL_DeleteContext(SDLGLWindow::m_glCtxt);
+            SDLGLWindow::m_glCtxt = 0;
+        }
+    }
+
+    HWWindowReference* SDLGLAPI::newWindow(int resX, int resY, WindowType type)
+    {
+        SDLGLWindow* wref = new SDLGLWindow();
+        wref->createWindow(glm::ivec2(resX, resY), (int)type);
+        if(!m_firstWindow)
+        {
+            m_firstWindow = wref;
+            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLGLAPI by Ryelow <endoh@endoh.ca>");
+        }
+        m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
+        return (HWWindowReference*)wref;
+    }
+
+    void SDLGLWindow::createWindow(glm::ivec2 size, int type)
     {
         m_windowSize = size;
 
@@ -199,6 +201,126 @@ namespace mtx::sdl
         glEnable(GL_CULL_FACE);
     }
 
+    void SDLGLWindow::beginFrame()
+    {
+        SDL_GL_MakeCurrent(m_sWind, m_glCtxt);
+        m_frameBegin = std::clock();
+    }
+    
+    void SDLGLWindow::endFrame()
+    {
+        m_deltaTime = float(clock() - m_frameBegin) / CLOCKS_PER_SEC;
+        SDL_GL_SwapWindow(m_sWind);
+    }
+#endif
+
+#ifdef VK_ENABLED
+#define HWAPI_VK (dynamic_cast<vk::VKAPI*>(App::getHWAPI()))
+    SDLVKAPI::SDLVKAPI() : SDLAPI()
+    {
+	DEV_MSG("initializing SDLVKAPI");
+	
+    }
+
+    void SDLVKAPI::shutdown()
+    {
+
+    }
+
+    HWWindowReference* SDLVKAPI::newWindow(int resX, int resY,
+					   WindowType type)
+    {
+        SDLVKWindow* wref = new SDLVKWindow();
+        wref->createWindow(glm::ivec2(resX, resY), (int)type);
+        if(!m_firstWindow)
+        {
+            m_firstWindow = wref;
+            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLVKAPI by Ryelow <endoh@endoh.ca>");
+        }
+        m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
+        return (HWWindowReference*)wref;
+    }
+    
+    void SDLVKWindow::createWindow(glm::ivec2 size, int type)
+    {
+        m_windowSize = size;
+
+	m_sWind = SDL_CreateWindow("Matrix Vulkan",
+				   0, 0, size.x, size.y,
+				   SDL_WINDOW_SHOWN |
+				   SDL_WINDOW_VULKAN);
+
+	unsigned int extension_count = 0;
+	const char** extension_names = 0;
+
+	SDL_Vulkan_GetInstanceExtensions(m_sWind,
+					 &extension_count,
+					 NULL);
+	extension_names = (const char**)malloc(sizeof(char*) * extension_count);
+	SDL_Vulkan_GetInstanceExtensions(m_sWind,
+					 &extension_count,
+					 extension_names);
+
+	HWAPI_VK->firstTimeInit(extension_names, extension_count);
+
+	SDL_Vulkan_CreateSurface(m_sWind,
+				 (SDL_vulkanInstance)HWAPI_VK->getInstance(),
+				 (SDL_vulkanSurface*)&m_surface);
+	m_presentQueue = HWAPI_VK->getSurfacePresentQueue(m_surface);
+	m_graphicsQueue = HWAPI_VK->getGraphicsQueue();
+
+	vkGetDeviceQueue(HWAPI_VK->getDevice(),
+			 m_presentQueue, 0,
+			 &m_vkPresentQueue);
+
+	vk::VKSwapChainSupportDetails details;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(HWAPI_VK->getPhysicalDevice(),
+						  m_surface,
+						  &details.capabilities);
+	unsigned int format_count;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(HWAPI_VK->getPhysicalDevice(),
+					     m_surface,
+					     &format_count,
+					     NULL);
+	if(format_count != 0)
+	{
+	    details.formats.resize(format_count);
+	    vkGetPhysicalDeviceSurfaceFormatsKHR(HWAPI_VK->getPhysicalDevice(),
+						 m_surface,
+						 &format_count,
+						 details.formats.data());
+	}
+
+	unsigned int present_mode_count;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(HWAPI_VK->getPhysicalDevice(),
+						  m_surface,
+						  &present_mode_count,
+						  NULL);
+	if(present_mode_count != 0)
+	{
+	    details.presentModes.resize(present_mode_count);
+	    vkGetPhysicalDeviceSurfacePresentModesKHR(HWAPI_VK->getPhysicalDevice(),
+						      m_surface,
+						      &present_mode_count,
+						      details.presentModes.data());
+	}
+
+	bool swap_chain_possible = false;
+	
+    }
+
+    void SDLVKWindow::beginFrame()
+    {
+	m_frameBegin = std::clock();
+	HWAPI_VK->setSurface(&m_surface);
+    }
+
+    void SDLVKWindow::endFrame()
+    {
+	m_deltaTime = float(clock() - m_frameBegin) / CLOCKS_PER_SEC;
+    }
+#endif
+    
     void SDLWindow::setGrab(bool grab)
     {
         SDL_bool _g = SDL_FALSE;
@@ -213,17 +335,5 @@ namespace mtx::sdl
         DEV_ASSERT(title);
 
         SDL_SetWindowTitle(m_sWind, title);
-    }
-
-    void SDLWindow::beginFrame()
-    {
-        SDL_GL_MakeCurrent(m_sWind, m_glCtxt);
-        m_frameBegin = std::clock();
-    }
-    
-    void SDLWindow::endFrame()
-    {
-        m_deltaTime = float(clock() - m_frameBegin) / CLOCKS_PER_SEC;
-        SDL_GL_SwapWindow(m_sWind);
     }
 }

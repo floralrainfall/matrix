@@ -4,7 +4,6 @@
 #include <mmaterial.hpp>
 #include <algorithm>
 #include <cstring>
-#include <hw/mgl.hpp>
 #include <Bullet3Geometry/b3GeometryUtil.h>
 
 namespace mtx
@@ -20,13 +19,14 @@ namespace mtx
         return d;
     }
 
-    BSPFile::BSPFile(const char* bsp, bool gfx)
+    BSPFile::BSPFile(const char* bsp)
     {
         m_name = bsp;
-        m_gfxEnabled = gfx;
+        m_gfxEnabled = false;
         std::FILE* bspfile = App::getFileSystem()->open(bsp);
         m_currentClusterIndex = 0;
         m_useVis = true;
+	m_skybox = NULL;
         if(bspfile)
         {
             std::fread(&m_header, sizeof(BSPHeader), 1, bspfile);
@@ -39,26 +39,14 @@ namespace mtx
                 BSPDirentry* ent = &m_header.dirents[i];
                 void* ent_data = ent->loadData(bspfile);
                 direntData[i] = ent_data;
+                DEV_MSG("loaded dirent %i, size %i", i, ent->length);
             }
 
             BSPDirentry* f = &m_header.dirents[BSP_ENTITIES];
             readEntitesLump(f);
 
-            BSPTexture* textures = (BSPTexture*)direntData[BSP_TEXTURES];
-
-            int texturec = m_header.dirents[BSP_TEXTURES].length / sizeof(BSPTexture);
-            for(int i = 0; i < texturec; i++)
-            {
-                BSPTexture tx = textures[i];
-                std::string txpath = tx.name + std::string(".tga");
-                HWTextureReference* r = App::getHWAPI()->loadCachedTexture(txpath.c_str());
-                if(!r)
-                    r = App::getHWAPI()->loadCachedTexture("textures/badbsp.png");
-                m_textures.push_back(r);
-            }
-
             BSPNode* root = (BSPNode*)direntData[BSP_NODES];
-            parseTreeNode(root);
+            parseTreeNode(root, true, false);
         }
     }
 
@@ -67,7 +55,7 @@ namespace mtx
 
     }
 
-    void BSPFile::addLeafFaces(BSPLeaf* leaf)
+    void BSPFile::addLeafFaces(BSPLeaf* leaf, bool brushen, bool leaffaceen)
     {
         int leafcount = m_header.dirents[BSP_LEAFS].length / sizeof(BSPLeaf);
         int brushcount = m_header.dirents[BSP_BRUSHES].length / sizeof(BSPBrush);
@@ -89,7 +77,12 @@ namespace mtx
 
         for(int b = leaf->leafbrush; b < (leaf->leafbrush + leaf->n_leafbrushes); b++)
         {
-            BSPBrush* brush = &brushes[leafbrushes[b]];
+            if(!brushen)
+                break;
+            int brushid = leafbrushes[b];
+            if(brushid > brushcount || brushid < 0)
+                break;
+            BSPBrush* brush = &brushes[brushid];
             BSPBrushModel brushmodel;
             for(int s = brush->brushside; s < (brush->brushside + brush->n_brushsides); s++)
             {
@@ -109,12 +102,13 @@ namespace mtx
         }
         else
         {
-            if(m_gfxEnabled)
+            if(m_gfxEnabled && leaffaceen)
             {
                 for(int f = leaf->leafface; f < (leaf->leafface + leaf->n_leaffaces); f++)
                 {
                     BSPFace* face = &faces[leaffaces[f]];
                     BSPFaceModel facemodel = addFaceModel(face);
+
                     m.m_models.push_back(facemodel);
                 }
             }
@@ -170,8 +164,8 @@ namespace mtx
             App::getHWAPI()->addTextureToCache(lmt, tname);
         }
         m.m_lightmap = lmt;
-        m.m_texture = m_textures.at(face->texture);
-        
+
+
         // first part is designed to fit with ModelComponent layout so i can reuse materials
 
         m.m_buffer->upload(vertices.size() * sizeof(BSPVertex), vertices.data());
@@ -181,9 +175,17 @@ namespace mtx
         BSPTexture texture = ((BSPTexture*)direntData[BSP_TEXTURES])[face->texture];
 
         if(texture.name == std::string("textures/skies/skybox")) // TODO: make this not hardcoded
-            m.m_program = 0;
+            m.m_program = Material::getMaterial("materials/bsp/sky.mmf")->getProgram();
         else
+        {
             m.m_program = Material::getMaterial("materials/bsp/bsp.mmf")->getProgram();
+
+            std::string txpath = texture.name + std::string(".tga");
+            HWTextureReference* r = App::getHWAPI()->loadCachedTexture(txpath.c_str());
+            if(!r)
+                r = App::getHWAPI()->loadCachedTexture("textures/badbsp.png");
+            m.m_texture = r;
+        }
         
         layout->upload();
 
@@ -197,7 +199,7 @@ namespace mtx
         m_currentClusterIndex = getCluster(new_pos);
     }
 
-    void BSPFile::parseTreeNode(BSPNode* node)
+    void BSPFile::parseTreeNode(BSPNode* node, bool brush, bool leafface)
     {
         // DEV_MSG("node %p, a: %i, b: %i", node, node->children[0], node->children[1]);
         BSPLeaf* leafs = (BSPLeaf*)direntData[BSP_LEAFS];
@@ -209,12 +211,12 @@ namespace mtx
             int leaf = -(node->children[0]);
             BSPLeaf* leafNode = &leafs[leaf];
             if(leaf < leafcount)
-                addLeafFaces(leafNode);
+                addLeafFaces(leafNode, brush, leafface);
         }
         else
         {
             BSPNode* cnode = &nodes[node->children[0]];
-            parseTreeNode(cnode);
+            parseTreeNode(cnode, brush, leafface);
         }
 
         if(node->children[1] < 0)
@@ -222,12 +224,12 @@ namespace mtx
             int leaf = -(node->children[1]);
             BSPLeaf* leafNode = &leafs[leaf];
             if(leaf < leafcount)
-                addLeafFaces(leafNode);
+                addLeafFaces(leafNode, brush, leafface);
         }
         else
         {            
             BSPNode* cnode = &nodes[node->children[1]];
-            parseTreeNode(cnode);
+            parseTreeNode(cnode, brush, leafface);
         }
     }
 
@@ -249,11 +251,21 @@ namespace mtx
         rp.data.tx.tx = model->m_lightmap;
         rp.data.tx.slot = 1;
         App::getHWAPI()->pushParam(rp);
+	if(m_skybox)
+	{
+	    rp.name = "skybox";
+	    rp.type = HWT_TEXTURE;
+	    rp.data.tx.tx = m_skybox;
+	    rp.data.tx.slot = 1;
+	    App::getHWAPI()->pushParam(rp);
+	}
         App::getHWAPI()->gfxDrawElements(HWAPI::HWPT_TRIANGLES, 
                                         model->m_layout, 
                                         model->m_indexCount, 
                                         model->m_index, 
                                         program);
+	if(m_skybox)
+	    App::getHWAPI()->popParam();
         App::getHWAPI()->popParam();
         App::getHWAPI()->popParam();
     }
@@ -272,7 +284,7 @@ namespace mtx
                 BSPLeafModel leaf = m_leafs.at(i);
 
                 if(!leaf.m_models.size())
-                    break;
+                    continue;
 
                 int y = m_currentClusterIndex;
                 int x = leaf.m_cluster;
@@ -339,6 +351,7 @@ namespace mtx
             {
                 btCollisionShape* brushshape = new btConvexHullShape((btScalar*)intermediate.data(), intermediate.size());
                 btRigidBody* brushbody = new btRigidBody(0.f, NULL, brushshape);
+                brushbody->setUserPointer(this);
                 world->addRigidBody(brushbody);
                 rb_added++;
             }
@@ -383,6 +396,14 @@ namespace mtx
             getCluster(x),
             getCluster(y)
         );
+    }
+
+    void BSPFile::initGfx()
+    {
+        m_gfxEnabled = true;
+
+        BSPNode* root = (BSPNode*)direntData[BSP_NODES];
+        parseTreeNode(root, false, true);
     }
 
     BSPComponent::BSPComponent(BSPFile* file)

@@ -1,8 +1,11 @@
 #pragma once
+#ifndef GL_ENABLED
+#error "hw/mgl.hpp in use, but GL_ENABLED not defined"
+#endif
 #include <mhwabs.hpp>
 #include <glad/glad.h>
-#include <source_location>
 #include <vector>
+#include <source_location>
 
 namespace mtx::gl
 {
@@ -21,17 +24,18 @@ namespace mtx::gl
     class GLTexture : public HWTextureReference
     {
         GLuint m_glTextureId;
+	int m_uploadedTextures;
     public:
         GLTexture();
         virtual ~GLTexture();
 
-        // uploads an RGBA image
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true);
         virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true);
 
         void setFilter(GLenum min, GLenum mag);
 
         GLuint getId() { return m_glTextureId; }
+	GLenum getBuffer();
     };
     
     class GLProgram : public HWProgramReference
@@ -62,9 +66,11 @@ namespace mtx::gl
     };
 
     // GL3API is **NOT** meant to be used on its own, and is meant to be further subclassed to manage windows/events/etc
-    // look at SDLAPI in hw/msdl.hpp and hw/msdl.cpp for an example of a full HWAPI
-    class GL3API : public HWAPI
+    // look at SDLGLAPI in hw/msdl.hpp and hw/msdl.cpp for an example
+    // of a full HWAPI 
+    class GL3API : public virtual HWAPI
     {
+        bool m_glReady;
     public:
         GL3API();
 
@@ -83,5 +89,8 @@ namespace mtx::gl
         virtual HWTextureReference* newTexture();
         virtual HWProgramReference* newProgram();
         virtual HWLayoutReference* newLayout();
+
+        bool getGlReady() { return m_glReady; }
+        void setGlReady(bool gl) { m_glReady = gl; }
     };
 };

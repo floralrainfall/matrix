@@ -34,4 +34,9 @@ namespace mtx
             return "null";
         }
     }
+
+    void ConfigFile::setValue(const char* property, std::string text)
+    {
+	m_values[property] = text;
+    }
 }

@@ -1,4 +1,5 @@
 #include <rdmnet.hpp>
+#include <mphysics.hpp>
 #include <mdev.hpp>
 
 enum PacketType
@@ -6,6 +7,7 @@ enum PacketType
     RDMPAK_PLAYERINFO,
     RDMPAK_CURRENTPLAYERINFO,
     RDMPAK_DESTROYPLAYER,
+    RDMPAK_PLAYERPOSITION,
     RDMPAK_MOTD,
 };
 
@@ -15,8 +17,13 @@ union packetdata {
     } playerinfo;
     struct {
         char motd[128];
-
     } motd;
+    struct {
+        int playerid;
+        glm::vec3 position; // delta position
+        glm::quat direction;
+	bool delta;
+    } playerposition;
 };
 
 RDMNetListener::RDMNetListener(mtx::SceneManager* scene)
@@ -45,6 +52,17 @@ void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClien
         player->client = client;
         client->setUserData((void*)player);
         m_players[id] = player;
+
+        player->node = new mtx::SceneNode();
+        player->node->setParent(m_scene->getRootNode());
+
+	player->playerbody = new mtx::RigidBody(
+	    new btCapsuleShape(16.f,32.f),
+	    1.f
+	);
+	player->node->addComponent(player->playerbody);
+
+	player->position = mtx::BulletHelpers::v3FromBullet(player->playerbody->getTransform().getOrigin());
 
         DEV_MSG("added new player %i", player->playerid);
 
@@ -87,6 +105,18 @@ void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* cli
             DEV_MSG("receiving player id %i", dt->playerinfo.playerid);
             RDMPlayer* newplayer = new RDMPlayer();
             newplayer->playerid = dt->playerinfo.playerid;
+            newplayer->node = new mtx::SceneNode();
+            newplayer->node->setParent(m_scene->getRootNode());
+
+            mtx::MaterialComponent* playermat =
+		new mtx::MaterialComponent(
+		    mtx::Material::getMaterial("materials/diffuse.mmf"));
+            mtx::ModelComponent* playermdl =
+		new mtx::ModelComponent("models/ball.obj");
+
+            newplayer->node->addComponent(playermdl);
+            newplayer->node->addComponent(playermat);
+
             m_players[newplayer->playerid] = newplayer;
         }
         break;
@@ -115,8 +145,107 @@ void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* cli
             DEV_MSG("MOTD: %s", dt->motd.motd);
         }
         break;
+    case RDMPAK_PLAYERPOSITION:
+        if(interface->getServer())
+        {
+            RDMPlayer* player = (RDMPlayer*)client->getUserData();
+	    mtx::RigidBody* body =
+		(mtx::RigidBody*)player->node->getComponent("RigidBody");
+
+	    btTransform tf = body->getTransform();
+	    player->position = mtx::BulletHelpers::v3FromBullet(tf.getOrigin());
+
+	    /*
+	      float dist = glm::distance(player->position,dt->playerposition.position);
+	      if(dist < 10.0)
+	      {
+	        DEV_MSG("player %i is going too fast (%fu in 1 upd pak)",
+	        player->playerid, dist);
+	      break;
+	      }
+	    */
+	    
+	    if(dt->playerposition.delta)
+		player->position += dt->playerposition.position;
+	    else
+		player->position = dt->playerposition.position;
+	    if(player->node)
+	    {
+		tf.setOrigin(mtx::BulletHelpers::v3ToBullet(player->position));
+		body->setTransform(tf);
+	    }
+	    
+            player->direction = dt->playerposition.direction;
+            player->position_dirty = true;
+        }
+        else
+        {
+            RDMPlayer* player = (RDMPlayer*)m_players[dt->playerposition.playerid];
+            player->position = dt->playerposition.position;
+            player->direction = dt->playerposition.direction;
+            player->position_dirty = false;
+
+            if(player->node)
+            {
+                mtx::SceneTransform& tf = player->node->getTransform();
+                tf.setPosition(player->position);
+                tf.setRotation(player->direction);
+            }
+        }
+        break;
     default:
         DEV_MSG("unknown packet id %02x", (int)packettype);
         break;
+    }
+}
+
+void RDMNetListener::onFrame(mtx::NetInterface* interface)
+{
+    if(interface->getServer())
+    {
+        for(auto p : m_players)
+        {
+	    btTransform bodytf = p.second->playerbody->getTransform();
+	    if(glm::distance(p.second->last_upd_position,
+			     mtx::BulletHelpers::v3FromBullet(bodytf.getOrigin()))
+	       != 0)
+		p.second->position_dirty = true;
+            if(p.second->position_dirty)
+            {
+                ENetPacket* packet = enet_packet_create(0, sizeof(packetdata::playerposition) + 1, 0);
+                packet->data[0] = RDMPAK_PLAYERPOSITION;
+                packetdata* pd = (packetdata*)(packet->data + 1);
+
+		pd->playerposition.position = p.second->position;
+		pd->playerposition.delta = false;
+		pd->playerposition.direction = p.second->direction;
+                pd->playerposition.playerid = p.first;
+                // enet_peer_send(((mtx::NetClient*)interface)->getPeer(), 0, packet);
+                enet_host_broadcast(interface->getHost(), 0, packet);
+                p.second->position_dirty = false;
+            }
+        }
+    }   
+    else
+    {
+        if(!m_localPlayer)
+            return;
+
+        if(m_localPlayer->position_dirty)
+        {
+            ENetPacket* packet = enet_packet_create(0,
+						    sizeof(packetdata::playerposition) + 1, 0);
+            packet->data[0] = RDMPAK_PLAYERPOSITION;
+            packetdata* pd = (packetdata*)(packet->data + 1);
+            pd->playerposition.position =
+		m_localPlayer->last_upd_position -
+		m_localPlayer->position;
+	    m_localPlayer->last_upd_position = m_localPlayer->position;
+	    pd->playerposition.delta = true;
+            pd->playerposition.playerid = m_localPlayer->playerid;
+            pd->playerposition.direction = m_localPlayer->direction;
+            enet_peer_send(((mtx::NetClient*)interface)->getPeer(), 0, packet);
+            m_localPlayer->position_dirty = false;
+        }
     }
 }

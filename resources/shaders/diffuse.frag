@@ -20,6 +20,7 @@ uniform light lights[MAX_LIGHTS];
 uniform int lights_on = 0;
 uniform int specular_k = 16;
 uniform vec3 view_position;
+uniform vec4 color;
 
 uniform sampler2D texture0;
 
@@ -65,6 +66,7 @@ void main()
     for(int i = 0; i < lights_on; i++)
         otherlights += calculateLight(lights[i]);
 
-    vec3 result = (calculateSunLight(sun) + otherlights) * v_fcolor.xyz;
-    f_color = vec4(result, v_fcolor.a);
+    vec3 result = (calculateSunLight(sun) + otherlights) *
+        v_fcolor.xyz * color.xyz;
+    f_color = vec4(result, v_fcolor.a * color.a);
 } 

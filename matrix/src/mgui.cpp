@@ -158,6 +158,8 @@ namespace mtx
         m_textureUvSize.y = (float)m_characterSize.y / (float)m_textureSize.y;
 
         int charactersPer = m_textureSize.x / m_characterSize.x;
+	if(charactersPer == 0)
+	    return;
 
         int line = 0;
         int col = 0;

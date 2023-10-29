@@ -3,13 +3,15 @@
 #include <mdev.hpp>
 #include <sstream>
 
-#define HWAPI_GL ((GL3API*)App::getHWAPI())
+#define HWAPI_GL (dynamic_cast<GL3API*>(App::getHWAPI()))
 
 namespace mtx::gl
 {
     GLTexture::GLTexture()
     {
         glGenTextures(1, &m_glTextureId);
+	setTextureType(HWTT_TEXTURE2D);
+	m_uploadedTextures = 0;
     }
 
     GLTexture::~GLTexture()
@@ -17,49 +19,66 @@ namespace mtx::gl
         glDeleteTextures(1, &m_glTextureId);
     }
 
+    GLenum GLTexture::getBuffer()
+    {
+	switch(m_type)
+	{
+	case HWTT_TEXTURE2D:
+	    return GL_TEXTURE_2D;
+	case HWTT_TEXTURE_CUBEMAP:
+	    return GL_TEXTURE_CUBE_MAP;
+	}
+	return GL_TEXTURE_2D;
+    }
+    
     void GLTexture::upload(glm::ivec2 size, void* data, bool genMipMaps)
     {
-        glBindTexture(GL_TEXTURE_2D, m_glTextureId);
+	GLenum slot = getBuffer();
+        glBindTexture(slot, m_glTextureId);
         HWAPI_GL->checkError();
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(slot, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
         HWAPI_GL->checkError();
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(slot, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(slot, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         if(genMipMaps)
-            glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
+            glGenerateMipmap(slot);
+        glBindTexture(slot, 0);
 
         m_textureSize = size;
+	m_uploadedTextures++;
     }
 
     void GLTexture::setFilter(GLenum min, GLenum mag)
-    {        
-        glBindTexture(GL_TEXTURE_2D, m_glTextureId);
+    {
+	GLenum slot = getBuffer();
+        glBindTexture(slot, m_glTextureId);
         HWAPI_GL->checkError();
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag);
+        glTexParameteri(slot, GL_TEXTURE_MIN_FILTER, min);
+        glTexParameteri(slot, GL_TEXTURE_MAG_FILTER, mag);
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(slot, 0);
     }
 
     void GLTexture::uploadRGB(glm::ivec2 size, void* data, bool genMipMaps)
     {
-        glBindTexture(GL_TEXTURE_2D, m_glTextureId);
+	GLenum slot = getBuffer();
+        glBindTexture(slot, m_glTextureId);
         HWAPI_GL->checkError();
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(slot, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
         HWAPI_GL->checkError();
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(slot, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(slot, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         if(genMipMaps)
-            glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
+            glGenerateMipmap(slot);
+        glBindTexture(slot, 0);
 
         m_textureSize = size;
+	m_uploadedTextures++;
     }
 
     GLBuffer::GLBuffer()
@@ -355,8 +374,11 @@ namespace mtx::gl
                     DEV_ASSERT(prop.data.tx.slot < maxTextureIds)
                     else
                     {
-                        glActiveTexture(GL_TEXTURE0 + prop.data.tx.slot);
-                        glBindTexture(GL_TEXTURE_2D, ((GLTexture*)prop.data.tx.tx)->getId());
+                        glActiveTexture(GL_TEXTURE0 +
+					prop.data.tx.slot);
+			GLTexture* tr = (GLTexture*)
+			    prop.data.tx.tx;
+                        glBindTexture(tr->getBuffer(), tr->getId());
                         glUniform1i(uniform, prop.data.tx.slot);
                     }
                     break;

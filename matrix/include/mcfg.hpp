@@ -13,5 +13,6 @@ namespace mtx
 
         bool getFound() { return m_found; }
         std::string getValue(const char* property);
+	void setValue(const char* property, std::string text);
     };
 }

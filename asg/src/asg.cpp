@@ -48,6 +48,11 @@ class ASGApp : public mtx::App
     glm::vec3 m_shipAngularVelocity;
 
 public:
+    ASGApp(int argc, char** argv) : App(argc, argv)
+    {
+
+    }
+    
     virtual void init() {
         m_sceneManager = new mtx::SceneManager(this);
         m_viewport = new mtx::Viewport(640, 480);
@@ -119,9 +124,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ASGApp app = ASGApp();
-    
-    app.initParameters(argc, argv);
+    ASGApp app = ASGApp(argc, argv);
 
     return app.main();
 }
