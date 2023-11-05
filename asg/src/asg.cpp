@@ -56,7 +56,7 @@ public:
     virtual void init() {
         m_sceneManager = new mtx::SceneManager(this);
         m_viewport = new mtx::Viewport(640, 480);
-        m_viewport->setClearColor(glm::vec4(0,0,0,0));
+        m_viewport->setClearColor(glm::vec4(0,0,0,1));
         m_window = newWindow(m_viewport);
         m_window->setTitle("Awesome Space Game");
 
@@ -94,8 +94,8 @@ public:
         
         float movespeed = 16.0;
 
-        ptf.setPosition(ptf.getPosition() + (m_shipVelocity * (float)getDeltaTime()));
-        ptf.setRotation(ptf.getRotation() * glm::quat(m_shipAngularVelocity * (float)getDeltaTime()));
+        ptf.setPosition(ptf.getPosition() + (m_shipVelocity * (float)getSchedulerTime()));
+        ptf.setRotation(ptf.getRotation() * glm::quat(m_shipAngularVelocity * (float)getSchedulerTime()));
         playerNode->setTransform(ptf);
 
         glm::vec3 right = ptf.getRotation() * glm::vec3(1, 0, 0);
@@ -109,17 +109,34 @@ public:
         cameraNode->setTransform(tf);
 
         if(m_eventListener->keysDown['w'])
-            m_shipVelocity += forward * (float)getDeltaTime();
+            m_shipVelocity += forward * (float)getSchedulerTime();
         if(m_eventListener->keysDown['s'])
-            m_shipVelocity -= forward * (float)getDeltaTime();
+            m_shipVelocity -= forward * (float)getSchedulerTime();
         if(m_eventListener->keysDown['a'])
-            m_shipAngularVelocity += right * (float)getDeltaTime();
+            m_shipAngularVelocity += right * (float)getSchedulerTime();
         if(m_eventListener->keysDown['d'])
-            m_shipAngularVelocity -= right * (float)getDeltaTime();
-        
-        m_guiShipStatus->setText(std::format("Dt: {:1.10f}, FPS: {:10.2f}\nVelocity: {} {} {}\nAngular Velocity: {} {} {}\nHeading: {} {} {}\nPosition: {} {} {}",getDeltaTime(), 1.0/getDeltaTime(), m_shipVelocity.x,m_shipVelocity.y,m_shipVelocity.z,m_shipAngularVelocity.x,m_shipAngularVelocity.y,m_shipAngularVelocity.z,forward.x,forward.y,forward.z,ptf.getPosition().x,ptf.getPosition().y,ptf.getPosition().z));
-        
-    } 
+            m_shipAngularVelocity -= right * (float)getSchedulerTime();        
+    }
+    
+    virtual void tickGfx() {
+        mtx::SceneTransform& ptf = playerNode->getTransform();
+        mtx::SceneTransform tf;
+
+        glm::vec3 right = ptf.getRotation() * glm::vec3(1, 0, 0);
+        glm::vec3 up = ptf.getRotation() * glm::vec3(0, 1, 0);
+        glm::vec3 forward = ptf.getRotation() * glm::vec3(0, 0, 1);
+	
+        m_guiShipStatus->setText(std::format(
+				     "Dt: {:1.10f}, TDt: {:1.10f}\n"
+				     "FPS: {:10.2f}, TFPS: {:1.10f}\n"
+				     "Velocity: {} {} {}\n"
+				     "Angular Velocity: {} {}{} \n" 
+				     "Heading: {} {} {}\n"
+				     "Position: {} {} {}",
+				     getDeltaTime(), getSchedulerTime(),
+				     1.0/getDeltaTime(), 1.0/getSchedulerTime(),
+				     m_shipVelocity.x,m_shipVelocity.y,m_shipVelocity.z,m_shipAngularVelocity.x,m_shipAngularVelocity.y,m_shipAngularVelocity.z,forward.x,forward.y,forward.z,ptf.getPosition().x,ptf.getPosition().y,ptf.getPosition().z));
+    }
 };
 
 int main(int argc, char** argv)

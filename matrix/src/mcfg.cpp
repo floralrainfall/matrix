@@ -6,7 +6,7 @@
 
 namespace mtx
 {
-    ConfigFile::ConfigFile(const char* file)
+    ConfigFile::ConfigFile(const char* file, bool cvar)
     {
         std::FILE* f = App::getFileSystem()->open(file);
         if(f)
@@ -16,9 +16,20 @@ namespace mtx
             {
                 if(line[0] == '#')
                     continue;
-                std::string name = std::strtok(line, "=");
-                std::string text = std::strtok(NULL, "\n");
-                m_values[name] = text;
+		if(cvar) // cvar config file
+		{
+		    std::string name = std::strtok(line, " ");
+		    std::string text = std::strtok(NULL, "\n");
+
+		    App::conVarManager->conVarCommand(name, text);
+		    m_values[name] = text;
+		}
+		else
+		{
+		    std::string name = std::strtok(line, "=");
+		    std::string text = std::strtok(NULL, "\n");
+		    m_values[name] = text;	
+		}
             }
             m_found = true;
         }

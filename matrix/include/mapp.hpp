@@ -7,6 +7,9 @@
 #include <mcfg.hpp>
 #include <sys/time.h>
 #include <irrKlang.h>
+#include <mschedule.hpp>
+#include <mconsole.hpp>
+#include <mcvar.hpp>
 
 namespace mtx
 {
@@ -59,11 +62,20 @@ namespace mtx
         double m_appFrameStart;
         double m_deltaTime;
         double m_timeTillNextAnnouncement;
+	double m_tickTime;
+	double m_tickDeltaTime;
         std::string m_headlessStatus;
 	ConfigFile* m_appConfig;
+	Scheduler* m_scheduler;
+
+	void thread_tick();
+	void parseArguments(int argc, char** argv);
     public:
         App(int argc = 0, char** argv = NULL);
 
+	static ConVarManager* conVarManager;
+	static Console* console;
+	
         virtual void init() {}; // allocate/initialize the game here
         virtual void initGfx() {}; // initialize graphics stuff
         virtual void tick() {}; // do stuff inbetween frames here
@@ -71,8 +83,32 @@ namespace mtx
         virtual void stop() {}; // deallocate all resources here
 
         static double getExecutionTime();
-        double getDeltaTime() { return m_deltaTime; }
+	
+	/// please see App::getSchedulerTime before us1ing this method
+	/// this is the time the main game loop takes to render a
+	/// frame
+	double getDeltaTime() { return m_deltaTime; }
+	/// this is the time the scheduler takes to do every
+	/// task. with only Tick as a task this should be approximate to
+	/// getTickTime but can change. remember that the scheduler
+	/// runs on a seperate thread, and using getDeltaTime will
+	/// return the wrong delta for your probable purposes (unless
+	/// you really need it)
+	double getSchedulerTime()
+	{
+	    return m_scheduler->getDeltaTime();
+	}
+	/// this is the time the App::thread_tick method takes to
+	/// run. this includes: sending/receiving network messages,
+	/// the scene tick, and the app tick. this is why you should
+	/// not use methods that interface with the video drawing
+	/// HWAPI's as its not very garunteed that they will allow out
+	/// of thread accesses
+	double getTickTime() { return m_tickDeltaTime; }
+	double& getTickRate() { return m_tickTime; }
 
+	Scheduler* getScheduler() { return m_scheduler; }
+	
 	/**
 	 * If this is set to false, the main loop will stop.
 	 */

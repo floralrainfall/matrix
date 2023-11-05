@@ -18,6 +18,17 @@ namespace mtx
     FileSystem* App::m_fileSystem = 0;
     irrklang::ISoundEngine* App::m_soundEngine = 0;
     double App::m_appStart = 0.0;
+    Console* App::console = 0;
+
+    ConVar r_hwapi = ConVar("r_hwapi",
+			    "",
+			    "");
+    ConVar tickrate = ConVar("tickrate",
+			     "",
+			     "");
+    ConVar snd_disable = ConVar("snd_disable",
+				"",
+				"");
 
     static std::map<std::string, HWAPIConstructor>  __getSupportedApis()
     {
@@ -35,23 +46,18 @@ namespace mtx
 
     App::App(int argc, char** argv)
     {
+	console = new Console();
+	
         if(m_fileSystem == 0)
             m_fileSystem = new FileSystem();
-	m_appConfig = new ConfigFile("matrix.cfg");
+	m_appConfig = new ConfigFile("matrix.cfg", true);
         m_appRunning = true;
-	for(int i = 1; i < argc; i += 2)
-	{
-	    if(i+1 >= argc)
-	    {
-		DEV_MSG("missing argument on last setting");
-		break;
-	    }
-	    
-	    m_appConfig->setValue(argv[i],argv[i+1]);
-	}
+
+	parseArguments(argc, argv);
+	
 	if(m_hwApi == 0)
         {
-	    std::string rmode = m_appConfig->getValue("hwapi");
+	    std::string rmode = r_hwapi.getString();
 	    m_hwApi = 0;
 	    for(auto api : __getSupportedApis())
 	    {
@@ -64,13 +70,13 @@ namespace mtx
 
 	    if(!m_hwApi)
 	    {
-		DEV_MSG("no hwapi found");
+		DEV_ERROR("no hwapi found");
 		std::string supported_hwapi_string;
 		
 		for(auto api : __getSupportedApis())
 		    supported_hwapi_string += api.first + " ";
 
-		DEV_MSG("supported hwapis: %s", supported_hwapi_string.c_str());
+		INFO_MSG("supported hwapis: %s", supported_hwapi_string.c_str());
 		m_appRunning = false;
 	    }
 
@@ -79,12 +85,18 @@ namespace mtx
             m_appStart = (double)timecheck.tv_sec +
 		((double)timecheck.tv_usec) / 1e+6;
         }
-	if(m_soundEngine == 0)
+	std::string sound_en = snd_disable.getString();
+	if(m_soundEngine == 0 && sound_en != "true")
 	{
 	    m_soundEngine = irrklang::createIrrKlangDevice();
 	}
         m_appHeadless = false;
 	m_appHeadlessFps = 3000;
+	
+	m_tickTime = 1.0/tickrate.getFloat();
+
+	m_scheduler = new Scheduler(this);
+	m_scheduler->newTask("Tick", &App::thread_tick);
     }
 
     NetServer* App::newServer(ENetAddress address)
@@ -101,11 +113,51 @@ namespace mtx
         return c;
     }
 
+    void App::parseArguments(int argc, char** argv)
+    {
+	for(int i = 1; i < argc; i++) {
+	    std::string arg = argv[i];
+	    // set ConVar... suspiciously like Source!
+	    if(arg[0] == '+')
+	    {
+		std::string name = arg.substr(1);
+		std::string value = argv[++i];
+		conVarManager->conVarCommand(name, value);
+	    }
+	    else
+		DEV_SOFTWARN("bad command %s", arg.c_str());
+	}
+	conVarManager->listConVars();
+    }
+
+    void App::thread_tick()
+    {
+	double tick_start = getExecutionTime();
+	std::chrono::time_point<std::chrono::system_clock> start =
+	    std::chrono::system_clock::now();
+	for(auto i : m_netInterfaces)
+	    i->eventFrame();
+	for(auto m : m_sceneManagers)
+	    m->tickScene();
+	tick();
+	m_hwApi->pumpOSEvents();
+
+	double exec_time = getExecutionTime() - tick_start;
+	double sleep_time = m_tickTime - exec_time;
+	//DEV_MSG("%f %f",exec_time, sleep_time);
+	if(sleep_time > 0.0)
+	    std::this_thread::sleep_for(std::chrono::duration<double>(
+					    sleep_time
+					    ));
+	
+	m_tickDeltaTime = getExecutionTime() - tick_start;
+    }
+
     int App::main()
     {
 	if(!m_appRunning)
 	{
-	    DEV_MSG("some kind of error on App init, cleaning up");
+	    DEV_ERROR("some kind of error on App init, cleaning up");
 	    goto cleanup;
 	}
 	
@@ -119,19 +171,14 @@ namespace mtx
         else
             initGfx();
 
+	m_scheduler->start();
         while(m_appRunning)
         {
             m_appFrameStart = getExecutionTime();
-            for(auto i : m_netInterfaces)
-                i->eventFrame();
-            for(auto m : m_sceneManagers)
-                m->tickScene();
-            tick();
+
             if(m_windows.size() != 0)
                 tickGfx();
             int p = 0;
-
-            m_hwApi->pumpOSEvents();
 
             for(int i = 0; i < m_windows.size(); i++) {
                 Window* window = m_windows.at(i);
@@ -156,7 +203,7 @@ namespace mtx
             {
                 if(m_timeTillNextAnnouncement < m_appFrameStart)
                 {
-                    DEV_MSG("Time: %f, Tick DT: %f, Ticks/Second: %f%s", getExecutionTime(), m_deltaTime, 1.0 / m_deltaTime, m_headlessStatus.c_str());
+                    INFO_MSG("Time: %f, Tick DT: %f, Ticks/Second: %f%s", getExecutionTime(), m_deltaTime, 1.0 / m_deltaTime, m_headlessStatus.c_str());
                     m_timeTillNextAnnouncement = m_appFrameStart + 5.f;
                 }
 		if(m_appHeadlessFps != 0)
@@ -176,6 +223,9 @@ namespace mtx
     cleanup:
         DEV_MSG("cleaning up");
 
+	if(m_scheduler)
+	    m_scheduler->stop();
+	
         stop();
 
         // clean up time
@@ -186,7 +236,7 @@ namespace mtx
             delete window;
         }        
 
-        DEV_MSG("goodbye");
+        INFO_MSG("goodbye");
 
         return 0;
     }

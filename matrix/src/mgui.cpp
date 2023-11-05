@@ -238,8 +238,11 @@ namespace mtx
 
     void GUITextComponent::setText(std::string text)
     {
-        m_text = text;
-        updateMesh();
+	if(m_text != text)
+	{
+	    m_text = text;
+	    updateMesh();
+	}
     }
 
     void GUITextComponent::setCharacterSize(glm::ivec2 size)

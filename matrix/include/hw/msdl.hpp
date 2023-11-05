@@ -63,6 +63,7 @@ namespace mtx::sdl
     {
 	friend class SDLVKAPI;
 	VkSurfaceKHR m_surface;
+	VkSwapchainKHR m_swapChain;
 	int m_presentQueue;
 	int m_graphicsQueue;
 	VkQueue m_vkPresentQueue;

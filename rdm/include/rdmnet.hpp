@@ -29,7 +29,8 @@ public:
     RDMPlayer* m_localPlayer;
 
     RDMNetListener(mtx::SceneManager* scene);
-
+    void loadResources();
+    
     virtual void onClientConnect(mtx::NetInterface* interface, mtx::NetClient* client);
     virtual void onClientDisconnect(mtx::NetInterface* interface, mtx::NetClient* client);
     virtual void onReceive(mtx::NetInterface* interface, mtx::NetClient* client, ENetPacket* packet);

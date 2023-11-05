@@ -20,10 +20,13 @@ add_library(matrix STATIC
   include/mfile.hpp
   include/mscene.hpp
   include/mmaterial.hpp
+  include/mconsole.hpp
+  include/mcvar.hpp
   include/mcfg.hpp
   include/mview.hpp
   include/mbsp.hpp
   include/mphysics.hpp
+  include/mschedule.hpp
   include/mnet.hpp
   include/stb_image.h
   
@@ -35,10 +38,13 @@ add_library(matrix STATIC
   src/mfile.cpp
   src/mscene.cpp
   src/mmaterial.cpp
+  src/mconsole.cpp
+  src/mcvar.cpp
   src/mcfg.cpp
   src/mview.cpp
   src/mbsp.cpp
   src/mphysics.cpp
+  src/mschedule.cpp
   src/mnet.cpp
 )
   
@@ -113,6 +119,10 @@ message(STATUS "frontend APIs: ${MATRIX_FRONTEND_APIS}")
 
 target_compile_definitions(matrix PUBLIC
   $<$<CONFIG:Debug>:MATRIX_DEBUG=1>
+)
+
+target_compile_definitions(matrix PRIVATE
+  CONVAR_ENABLE
 )
 
 target_link_libraries(matrix PUBLIC 

@@ -125,6 +125,7 @@ namespace mtx
         }
         char ad[32];
         enet_address_get_host_ip(&address, ad, sizeof(ad));
-        DEV_MSG("connecting to %s:%i", ad, address.port);	
+        DEV_MSG("connecting to %s:%i", ad, address.port);
+	m_online = true;
     }
 }

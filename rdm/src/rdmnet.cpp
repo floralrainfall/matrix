@@ -2,6 +2,9 @@
 #include <mphysics.hpp>
 #include <mdev.hpp>
 
+static mtx::Material* playerMaterial;
+static mtx::ModelData* playerModel;
+
 enum PacketType
 {
     RDMPAK_PLAYERINFO,
@@ -14,6 +17,7 @@ enum PacketType
 union packetdata {
     struct {
         int playerid;
+	double tickrate;
     } playerinfo;
     struct {
         char motd[128];
@@ -31,6 +35,13 @@ RDMNetListener::RDMNetListener(mtx::SceneManager* scene)
     m_scene = scene;
     m_lastPlayerId = 0;
     m_localPlayer = 0;
+}
+
+void RDMNetListener::loadResources()
+{ 
+    playerMaterial =
+	mtx::Material::getMaterial("materials/diffuse.mmf");
+    playerModel = mtx::ModelData::loadCached("models/ball.obj");   
 }
 
 void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClient* client)
@@ -71,6 +82,7 @@ void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClien
         playerpacket->data[0] = RDMPAK_PLAYERINFO;
         packetdata* pt = (packetdata*)(playerpacket->data + 1);
         pt->playerinfo.playerid = player->playerid;
+	pt->playerinfo.tickrate = m_scene->getApp()->getTickRate();
         enet_host_broadcast(interface->getHost(), 0, playerpacket);
 
         playerpacket = enet_packet_create(0, sizeof(packetdata::playerinfo) + 1, ENET_PACKET_FLAG_RELIABLE);
@@ -110,9 +122,11 @@ void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* cli
 
             mtx::MaterialComponent* playermat =
 		new mtx::MaterialComponent(
-		    mtx::Material::getMaterial("materials/diffuse.mmf"));
+		    playerMaterial
+		    );
             mtx::ModelComponent* playermdl =
-		new mtx::ModelComponent("models/ball.obj");
+		new mtx::ModelComponent();
+	    playermdl->setModelData(playerModel);
 
             newplayer->node->addComponent(playermdl);
             newplayer->node->addComponent(playermat);

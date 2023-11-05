@@ -42,7 +42,16 @@ namespace mtx
         ModelComponent(const char* model = 0);
         void setModel(const char* model);
 
-        void setTextureOverride(int id, HWTextureReference* ov) { m_textureOverrides[id] = ov; }
+        void setTextureOverride(int id, HWTextureReference* ov)
+	{
+	    m_textureOverrides[id] = ov;
+	}
+
+	void setModelData(ModelData* modeldata)
+	{
+	    m_modelData = modeldata;
+	}
+	
         ModelData* getModelData() { return m_modelData; }
 
         virtual void renderComponent();

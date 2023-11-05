@@ -71,6 +71,7 @@ namespace mtx::gl
     class GL3API : public virtual HWAPI
     {
         bool m_glReady;
+	HWTextureReference* m_whiteTexture;
     public:
         GL3API();
 

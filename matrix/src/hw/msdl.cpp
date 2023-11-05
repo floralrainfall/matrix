@@ -3,7 +3,7 @@
 #include <mdev.hpp>
 
 namespace mtx::sdl
-{
+{   
     SDLAPI::SDLAPI() : mtx::HWAPI()
     {
         DEV_MSG("initialized SDLAPI");
@@ -83,7 +83,9 @@ namespace mtx::sdl
 
     void SDLAPI::showMessageBox(const char* title, const char* message, MessageBoxType type)
     {
-        SDL_Window* window = 0;
+        SDL_Window* window = NULL;
+	if(m_firstWindow)
+	    window = m_firstWindow->getSDLRef();
         int flags = 0;
         switch(type)
         {
@@ -125,6 +127,8 @@ namespace mtx::sdl
         }
     }
 
+    ConVar sdl_lessmessages("sdl_lessmessages");
+    
     HWWindowReference* SDLGLAPI::newWindow(int resX, int resY, WindowType type)
     {
         SDLGLWindow* wref = new SDLGLWindow();
@@ -132,7 +136,8 @@ namespace mtx::sdl
         if(!m_firstWindow)
         {
             m_firstWindow = wref;
-            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLGLAPI by Ryelow <endoh@endoh.ca>");
+	    if(!sdl_lessmessages.getBool())
+		showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLGLAPI by Ryelow <endoh@endoh.ca>");
         }
         m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
         return (HWWindowReference*)wref;
@@ -163,7 +168,6 @@ namespace mtx::sdl
         }
 
         m_sWind = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, size.x, size.y, wflags);
-
 
         if(!m_glCtxt)
             m_glCtxt = SDL_GL_CreateContext(m_sWind);
@@ -235,7 +239,8 @@ namespace mtx::sdl
         if(!m_firstWindow)
         {
             m_firstWindow = wref;
-            showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLVKAPI by Ryelow <endoh@endoh.ca>");
+	    if(!sdl_lessmessages.getBool())
+		showMessageBox("Matrix", "Matrix is licensed under the GNU GPLv3.\nA copy of the license should have been included with your binary.\nUsing SDLVKAPI by Ryelow <endoh@endoh.ca>");
         }
         m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
         return (HWWindowReference*)wref;
@@ -305,6 +310,96 @@ namespace mtx::sdl
 						      details.presentModes.data());
 	}
 
+	VkSurfaceFormatKHR surface_format = details.formats[0];
+	for(auto format : details.formats)
+	{
+	    if(format.format == VK_FORMAT_B8G8R8A8_SRGB &&
+	       format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+	    {
+		surface_format = format;
+		break;
+	    }	    
+	}
+
+	VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	for(auto _present_mode : details.presentModes)
+	{
+	    if(_present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+	    {
+		present_mode = _present_mode;
+		break;
+	    }
+	}
+
+	VkExtent2D extent;
+	if(details.capabilities.currentExtent.width !=
+	   std::numeric_limits<unsigned int>::max())
+	{
+	    extent = details.capabilities.currentExtent;
+	}
+	else
+	{
+	    int width, height;
+	    VkExtent2D true_extent = {
+		static_cast<unsigned int>(size.x),
+		static_cast<unsigned int>(size.y)
+	    };
+	    true_extent.width = std::clamp(true_extent.width,
+					   details.capabilities.minImageExtent.width,
+					   details.capabilities.maxImageExtent.width);
+	    true_extent.height = std::clamp(true_extent.height,
+					   details.capabilities.minImageExtent.height,
+					   details.capabilities.maxImageExtent.height);
+	    extent = true_extent;
+	}
+	
+	unsigned int image_count = details.capabilities.minImageCount
+	    + 1;
+
+	if(image_count > 0 && image_count <
+	details.capabilities.maxImageCount)
+	{
+	    image_count = details.capabilities.maxImageCount;
+	}
+
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = m_surface;
+	createInfo.minImageCount = image_count;
+	createInfo.imageFormat = surface_format.format;
+	createInfo.imageColorSpace = surface_format.colorSpace;
+	createInfo.imageExtent = extent;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	unsigned int queue_indices[] = {
+	    m_graphicsQueue, m_presentQueue
+	};
+
+	if(m_graphicsQueue != m_presentQueue)
+	{
+	    createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+	    createInfo.queueFamilyIndexCount = 2;
+	    createInfo.pQueueFamilyIndices = queue_indices;
+	}
+	else
+	{
+	    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	    createInfo.queueFamilyIndexCount = 0;
+	    createInfo.pQueueFamilyIndices = NULL;
+	}
+
+	createInfo.preTransform =
+	    details.capabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.presentMode = present_mode;
+	createInfo.clipped = VK_TRUE;
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+	vkCreateSwapchainKHR(HWAPI_VK->getDevice(),
+			     &createInfo,
+			     NULL,
+			     &m_swapChain);
+	
 	bool swap_chain_possible = false;
 	
     }

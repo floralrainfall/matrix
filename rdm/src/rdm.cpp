@@ -15,6 +15,10 @@
 
 #include "rdmnet.hpp"
 
+mtx::ConVar rdm_launch_mode = mtx::ConVar("rdm_launch_mode",
+					  "Launch mode of RDM",
+					  "client");
+
 enum RDMLaunchMode
 {
     LAUNCH_SERVER,
@@ -114,6 +118,8 @@ public:
 
     RDMLaunchMode launchMode;
 
+    int menu_selectedItem;
+
     float m_cameraYaw;
     float m_cameraPitch;
 
@@ -121,7 +127,7 @@ public:
 
     RDMApp(int argc, char** argv) : App(argc, argv)
     {
-
+	menu_selectedItem = 0;
     }
     
     virtual void init() {
@@ -129,6 +135,8 @@ public:
         m_clientSceneManager = new mtx::SceneManager(this);
 	m_webService = new mtx::world::WebService();
 
+	getScheduler()->setPaused(true);
+	
         ENetAddress hostaddress;
         ENetAddress cliaddress;
         switch(launchMode)
@@ -141,6 +149,8 @@ public:
 
             m_netListenerServer = new RDMNetListener(m_serverSceneManager);
             server->setEventListener(m_netListenerServer);
+
+	    getScheduler()->setPaused(false);
             break;
         case LAUNCH_HOST:
             hostaddress.host = ENET_HOST_ANY;
@@ -149,6 +159,8 @@ public:
 
             m_netListenerServer = new RDMNetListener(m_serverSceneManager);
             server->setEventListener(m_netListenerServer);
+
+	    getScheduler()->setPaused(false);
         case LAUNCH_CLIENT:
             m_viewport = new mtx::Viewport(640, 480);
             m_viewport->setClearColor(glm::vec4(0.4,0.4,0.4,1));
@@ -158,8 +170,6 @@ public:
             m_window = newWindow(m_viewport, mtx::HWAPI::HWWT_NORMAL_RESIZABLE);
             m_window->setTitle("RDM alpha");
 
-            enet_address_set_host_ip(&cliaddress, "127.0.0.1");
-            cliaddress.port = 7936;
             client = newClient();
             m_netListenerClient = new RDMNetListener(m_clientSceneManager);
             client->setEventListener(m_netListenerClient);
@@ -207,6 +217,7 @@ public:
     }
 
     virtual void initGfx() {
+	m_netListenerClient->loadResources();
         m_uiSceneManager = new mtx::SceneManager(this);
         // m_window->getHwWindow()->setGrab(true);
     
@@ -346,6 +357,49 @@ public:
 		     m_physworld->getDeltaTime());
 	    m_guiShipStatus->setText(statustx);
 	}
+	else
+	{
+	    char statustx[1024];
+
+	    if(menu_selectedItem == 0)
+	    {
+		if(m_eventListener->keysDown['1'])
+		    menu_selectedItem = 1;
+		if(m_eventListener->keysDown['2'])
+		    menu_selectedItem = 2;
+		if(m_eventListener->keysDown['3'])
+		    menu_selectedItem = 3;		
+		snprintf(statustx, 1024, "Ryelow Deathmatch\n"
+			 "1: Connect to Game\n"
+			 "2: Create a Game\n"
+			 "3: Quit\n");
+	    }
+	    else if(menu_selectedItem == 1)
+	    {
+		snprintf(statustx, 1024, "Connect\n"
+			 "x: Exit to main menu\n"
+			 "c: Connect to 127.0.0.1\n");
+		if(m_eventListener->keysDown['x'])
+		    menu_selectedItem = 0;
+		if(m_eventListener->keysDown['c'])
+		{
+		    ENetAddress cliaddress;
+		    
+		    enet_address_set_host_ip(&cliaddress, "127.0.0.1");
+		    cliaddress.port = 7936;
+
+		    client->tryConnect(cliaddress);
+		    getScheduler()->setPaused(false);
+
+		    menu_selectedItem = -1;
+		}
+	    }
+	    else if(menu_selectedItem == 0)
+	    {
+
+	    }
+	    m_guiShipStatus->setText(statustx);
+	}
     }
 
     virtual void tick() {
@@ -364,7 +418,7 @@ int main(int argc, char** argv)
     RDMApp app = RDMApp(argc, argv);
 
     std::string launch_mode =
-	app.getConfig()->getValue("launch_mode");
+	rdm_launch_mode.getString();
     if(launch_mode == "server")
 	app.launchMode = LAUNCH_SERVER;
     else

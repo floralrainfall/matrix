@@ -8,7 +8,6 @@
 
 namespace mtx
 {
-
     void* BSPDirentry::loadData(std::FILE* bsp)
     {
         size_t fpos = std::ftell(bsp);
@@ -233,22 +232,34 @@ namespace mtx
         }
     }
 
+    ConVar r_bsptexel("r_bsptexel", "", "1");
+    ConVar r_bspluxel("r_bspluxel", "", "1");
+    ConVar r_vis("r_vis", "", "1");
+
     void BSPFile::renderFaceModel(BSPFaceModel* model, HWProgramReference* program)
     {
         if(!program)
             return;
         if(!m_gfxEnabled)
             return;
-            
+
+	HWTextureReference* tex = model->m_texture;
+	HWTextureReference* light = model->m_lightmap;
+
+	if(!r_bsptexel.getBool())
+	    tex = 0;
+	if(!r_bspluxel.getBool())
+	    light = 0;
+	
         HWRenderParameter rp;
         rp.name = "surface";
         rp.type = HWT_TEXTURE;
-        rp.data.tx.tx = model->m_texture;
+        rp.data.tx.tx = tex;
         rp.data.tx.slot = 0;
         App::getHWAPI()->pushParam(rp);
         rp.name = "lightmap";
         rp.type = HWT_TEXTURE;
-        rp.data.tx.tx = model->m_lightmap;
+        rp.data.tx.tx = light;
         rp.data.tx.slot = 1;
         App::getHWAPI()->pushParam(rp);
 	if(m_skybox)
@@ -277,7 +288,7 @@ namespace mtx
 
         m_facesRendered = 0;
         m_leafsRendered = 0;
-        if(m_useVis)
+        if(r_vis.getBool())
         {
             for(int i = 0; i < m_leafs.size(); i++)
             {
@@ -306,7 +317,7 @@ namespace mtx
             for(int i = 0; i < m_models.size(); i++)
             {
                 BSPFaceModel model = m_models.at(i);
-                renderFaceModel(&model, program);                    
+                renderFaceModel(&model, model.m_program);                    
                 m_facesRendered++;
             }
         }

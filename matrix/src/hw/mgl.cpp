@@ -7,6 +7,8 @@
 
 namespace mtx::gl
 {
+    ConVar r_glforcefilter("r_glforcefilter", "", "0");
+    
     GLTexture::GLTexture()
     {
         glGenTextures(1, &m_glTextureId);
@@ -286,6 +288,7 @@ namespace mtx::gl
     GL3API::GL3API()
     {
         DEV_MSG("initialized GL3API");
+	m_whiteTexture = 0;
     }
 
     void GL3API::bindToProgram(GLuint program)
@@ -340,6 +343,14 @@ namespace mtx::gl
 
     void GL3API::applyParamsToProgram(HWProgramReference* program)
     {
+	if(!m_whiteTexture)
+	{
+	    m_whiteTexture = newTexture();
+	    unsigned char image[] = {
+		0xff, 0xff, 0xff, 0xff
+	    };
+	    m_whiteTexture->upload(glm::ivec2(1,1), &image, false);
+	}
         int maxTextureIds;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureIds);
         for(auto prop : m_hwParams)
@@ -378,7 +389,27 @@ namespace mtx::gl
 					prop.data.tx.slot);
 			GLTexture* tr = (GLTexture*)
 			    prop.data.tx.tx;
-                        glBindTexture(tr->getBuffer(), tr->getId());
+			if(!tr)
+			    tr = (GLTexture*)m_whiteTexture;
+			else
+			{
+			    glBindTexture(tr->getBuffer(), tr->getId());
+			    if(r_glforcefilter.getBool())
+			    {
+				std::string filter =
+				    r_glforcefilter.getString();
+				if(filter == "linear")
+				{
+				    glTexParameteri(tr->getBuffer(), GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				    glTexParameteri(tr->getBuffer(), GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				} else if(filter == "nearest")
+				{
+				    glTexParameteri(tr->getBuffer(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				    glTexParameteri(tr->getBuffer(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				}
+			    }
+			}
+			glBindTexture(tr->getBuffer(), tr->getId());
                         glUniform1i(uniform, prop.data.tx.slot);
                     }
                     break;
