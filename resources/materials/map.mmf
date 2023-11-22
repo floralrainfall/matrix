@@ -1,0 +1,2 @@
+gl3vertex=shaders/map.gl3.vert
+gl3fragment=shaders/map.gl3.frag

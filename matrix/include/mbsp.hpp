@@ -48,9 +48,9 @@ namespace mtx
 
     struct BSPFaceModel
     {
-        HWTextureReference* m_texture;
-        HWTextureReference* m_lightmap;
-        HWBufferReference* m_buffer;
+        HWTextureReference* m_texture; // dont dealloc this
+        HWTextureReference* m_lightmap; // dont dealloc this
+        HWBufferReference* m_buffer; 
         HWBufferReference* m_index;
         HWProgramReference* m_program;
         int m_indexCount;
@@ -168,12 +168,14 @@ namespace mtx
         bool m_useVis;
         bool m_gfxEnabled;
         std::string m_name;
+	PhysicsWorld* m_physicsWorld;
 
         BSPHeader m_header;
         std::vector<BSPLeafModel> m_leafs;
         std::vector<BSPFaceModel> m_models;
         std::vector<BSPBrushModel> m_brushes;
         std::vector<HWTextureReference*> m_textures;
+	std::vector<btRigidBody*> m_brushBodies;
         glm::vec3 vecpos;
         int m_currentClusterIndex;
         int m_facesRendered;
@@ -188,8 +190,11 @@ namespace mtx
         void renderFaceModel(BSPFaceModel* model, HWProgramReference* program);
     public:
         BSPFile(const char* bsp);
+	~BSPFile();
+	
         HWLayoutReference* createModelLayout();
         void addToPhysicsWorld(PhysicsWorld* world);
+	void removeFromPhysicsWorld(PhysicsWorld* world);
         bool getUsingVis() { return m_useVis; }
         bool getGfxEnabled() { return m_gfxEnabled; }
         int getVisCluster() { return m_currentClusterIndex; }
@@ -203,6 +208,7 @@ namespace mtx
         int getCluster(glm::vec3 p);
         bool canSeeCluster(int x, int y);
         bool canSee(glm::vec3 x, glm::vec3 y);
+	std::string getName() { return m_name; }
 
         void initGfx();
     };
@@ -216,6 +222,7 @@ namespace mtx
         BSPComponent(BSPFile* file);
         virtual void renderComponent();
         virtual void tick();
+	void setBSP(BSPFile* file) { m_bspFile = file; };
         void setCameraNode(SceneNode* node) { m_camera = node; }
         virtual std::string className() { return "BSPComponent"; }
     };

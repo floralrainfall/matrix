@@ -24,7 +24,7 @@ namespace mtx
                     NetClient* c = getPeerClient(event.peer);
                     if(!c)
                     {
-                        DEV_MSG("received packet from unknown peer");
+                        DEV_SOFTWARN("received packet from unknown peer");
                         break;
                     }
                     if(m_listener)
@@ -37,7 +37,7 @@ namespace mtx
                     NetClient* c = getPeerClient(event.peer);                    
                     char ad[32];
                     enet_address_get_host_ip(&event.peer->address, ad, sizeof(ad));
-                    DEV_MSG("disconnect from %s:%i", ad, event.peer->address.port);
+                    INFO_MSG("disconnect from %s:%i", ad, event.peer->address.port);
                     if(m_listener && c)
                         m_listener->onClientDisconnect(this, c);
                     if(!getServer())
@@ -51,9 +51,16 @@ namespace mtx
                     char ad[32];
                     enet_address_get_host_ip(&event.peer->address, ad, sizeof(ad));
                     if(getServer())
-                        DEV_MSG("new connection from %s:%i", ad, event.peer->address.port)
-                    else
-                        DEV_MSG("connection to %s:%i established", ad, event.peer->address.port)
+		    {
+                        INFO_MSG("new connection from %s:%i", ad,
+				 event.peer->address.port);
+		    }
+		    else
+		    {
+                        INFO_MSG("connection to %s:%i established",
+				 ad, event.peer->address.port);
+			((NetClient*)this)->setConnected(true);
+		    }
                     enet_peer_ping_interval(event.peer, 16);
                     m_remoteClients.push_back(c);
                     if(m_listener)
@@ -90,10 +97,11 @@ namespace mtx
         m_online = true;
         if(!m_peer)
         {
-            DEV_MSG("could not create enet server");
+            DEV_ERROR("could not create enet server");
             m_online = false;
+	    return;
         }
-        DEV_MSG("started server on port %i", address.port);
+        INFO_MSG("started server on port %i", address.port);
         m_listener = 0;
     }
 
@@ -103,15 +111,17 @@ namespace mtx
         setHostSettings(m_peer);
         m_server = false;
         m_online = false;
+	m_connected = false;
         if(!m_peer)
-            DEV_MSG("could not create enet client");
-        m_listener = 0;
+            DEV_ERROR("could not create enet client");
+        m_listener = 0;	
     }
 
     NetClient::NetClient(ENetPeer* peer)
     {
         m_peer = 0;
         m_server = false;
+	m_connected = true;
         m_clientPeer = peer;
     }
 
@@ -120,12 +130,14 @@ namespace mtx
         m_clientPeer = enet_host_connect(m_peer, &address, 2, 0);
         if(m_clientPeer == NULL)
         {
-            DEV_MSG("no available peers for initializing connection");
+            DEV_ERROR("no available peers for initializing connection");
             m_online = false;
+	    return;
         }
         char ad[32];
         enet_address_get_host_ip(&address, ad, sizeof(ad));
-        DEV_MSG("connecting to %s:%i", ad, address.port);
+	INFO_MSG("connecting to %s:%i", ad, address.port);
 	m_online = true;
+	m_connected = false;
     }
 }

@@ -4,13 +4,20 @@
 #include <chrono>
 #include <thread>
 #include <functional>
+#include <SDL2/SDL_ttf.h>
+
+// put your frontends here
 
 #ifdef SDL_ENABLED
 #include <hw/msdl.hpp>
 #endif
 
+#ifdef MOTIF_ENABLED
+#include <hw/mmotif.hpp>
+#endif
+
 #define HWAPI_ENTRY_DEFAULT(x) \
-    api_map[ #x ] = HWAPIConstructorDefault<x>;
+    api_map2[ #x ] = HWAPIConstructorDefault<x>;
 
 namespace mtx
 {
@@ -29,10 +36,18 @@ namespace mtx
     ConVar snd_disable = ConVar("snd_disable",
 				"",
 				"");
+    ConVar hwapimodule = ConVar("hwapimodule",
+				"",
+				"");
 
+    // dynamic hwapi table
+    static std::map<std::string, HWAPIConstructor> api_map;
+    
+    // put your frontends here too
+    
     static std::map<std::string, HWAPIConstructor>  __getSupportedApis()
     {
-	std::map<std::string, HWAPIConstructor> api_map;
+	std::map<std::string, HWAPIConstructor> api_map2(api_map);
 #ifdef SDL_ENABLED
 #ifdef GL_ENABLED
 	HWAPI_ENTRY_DEFAULT(sdl::SDLGLAPI);
@@ -41,23 +56,80 @@ namespace mtx
 	HWAPI_ENTRY_DEFAULT(sdl::SDLVKAPI);
 #endif
 #endif
-	return api_map;
+#ifdef MOTIF_ENABLED
+	HWAPI_ENTRY_DEFAULT(motif::MotifAPI);
+#endif
+	return api_map2;
+    }
+
+    std::string App::getCompileString()
+    {
+	std::string relinfo;
+#ifdef NDEBUG
+	relinfo = "RELEASE";
+#else
+	relinfo = "DEBUG";
+#endif
+	
+	return "Matrix Alpha " + relinfo;
+    }
+    
+    std::string App::getExtraCompileInfoString()
+    {
+	return "";
     }
 
     App::App(int argc, char** argv)
     {
-	console = new Console();
+	m_scheduler = 0;
+	console = new Console(this);
+
+	INFO_MSG("%s %s",
+		 getCompileString().c_str(),
+		 getExtraCompileInfoString().c_str());
 	
         if(m_fileSystem == 0)
             m_fileSystem = new FileSystem();
 	m_appConfig = new ConfigFile("matrix.cfg", true);
+	parseArguments(argc, argv);
+
+	if(hwapimodule.getBool())
+	{
+	    HWAPILib lib(hwapimodule.getString().c_str());
+	    auto libctrs = lib.getConstructors();
+	    api_map.insert(libctrs.begin(), libctrs.end());
+	}
+	
+	if(__getSupportedApis().size() == 0)
+	{
+	    DEV_ERROR("there are no hwapis");
+	    exit(-1);
+	}
+	
+	std::string rmode = r_hwapi.getString();
+	if(rmode == "")
+	{
+	    rmode = __getSupportedApis().begin()->first;
+	    r_hwapi.setString(rmode);
+	}
+	    
+
+#ifndef NDEBUG
+#ifndef CONSOLE_DISABLE_WARNING
+	DEV_SOFTWARN("Matrix uses Console::Console. If Console::initGfx "
+		     "and Console::tickGfx aren't called, then it may not "
+		     "work correctly. Define CONSOLE_DISABLE_WARNING in "
+		     "the matrix project to disable this warning");
+#endif
+#endif
+	
         m_appRunning = true;
 
-	parseArguments(argc, argv);
-	
 	if(m_hwApi == 0)
         {
-	    std::string rmode = r_hwapi.getString();
+	    rmode = r_hwapi.getString();
+	    DEV_MSG("using hwapi %s", rmode.c_str());
+
 	    m_hwApi = 0;
 	    for(auto api : __getSupportedApis())
 	    {
@@ -79,6 +151,10 @@ namespace mtx
 		INFO_MSG("supported hwapis: %s", supported_hwapi_string.c_str());
 		m_appRunning = false;
 	    }
+	    else
+	    {
+		m_hwApi->addListener(new ConsoleEventListener(console));
+	    }
 
             struct timeval timecheck;
             gettimeofday(&timecheck, NULL);
@@ -97,6 +173,10 @@ namespace mtx
 
 	m_scheduler = new Scheduler(this);
 	m_scheduler->newTask("Tick", &App::thread_tick);
+
+	if(TTF_Init() < 0) {
+	    DEV_SOFTWARN("couldn't initialize ttf");
+	}
     }
 
     NetServer* App::newServer(ENetAddress address)
@@ -123,6 +203,12 @@ namespace mtx
 		std::string name = arg.substr(1);
 		std::string value = argv[++i];
 		conVarManager->conVarCommand(name, value);
+	    }
+	    else if(arg[0] == '-') // options
+	    {
+		std::string name = arg.substr(1);
+		std::string value = argv[++i];
+		// TODO: this
 	    }
 	    else
 		DEV_SOFTWARN("bad command %s", arg.c_str());
@@ -155,88 +241,67 @@ namespace mtx
 
     int App::main()
     {
-	if(!m_appRunning)
+	try
 	{
-	    DEV_ERROR("some kind of error on App init, cleaning up");
-	    goto cleanup;
-	}
+	    if(!m_appRunning)
+	    {
+		DEV_ERROR("some kind of error on App init, cleaning up");
+		goto cleanup;
+	    }
 	
-        init();
+	    init();
         
-        if(m_windows.size() == 0)
-        {                        
-            m_appHeadless = true;
-            m_timeTillNextAnnouncement = 0.f;
-        }
-        else
-            initGfx();
-
-	m_scheduler->start();
-        while(m_appRunning)
-        {
-            m_appFrameStart = getExecutionTime();
-
-            if(m_windows.size() != 0)
-                tickGfx();
-            int p = 0;
-
-            for(int i = 0; i < m_windows.size(); i++) {
-                Window* window = m_windows.at(i);
-                window->frame();
-
-                if(window->m_shouldClose)
-                {
-                    m_windows.erase(m_windows.begin() + p);
-                    if(m_windows.size() == 0 && m_appRunning)
-                    {
-                        DEV_MSG("last window closed, entering headless mode");
-                        m_appHeadless = true;
-                        m_timeTillNextAnnouncement = 0.f;
-                    }
-
-                    delete window;
-                    break;
-                }
-            }
-
-            if(m_appHeadless)
-            {
-                if(m_timeTillNextAnnouncement < m_appFrameStart)
-                {
-                    INFO_MSG("Time: %f, Tick DT: %f, Ticks/Second: %f%s", getExecutionTime(), m_deltaTime, 1.0 / m_deltaTime, m_headlessStatus.c_str());
-                    m_timeTillNextAnnouncement = m_appFrameStart + 5.f;
-                }
-		if(m_appHeadlessFps != 0)
-		{
-		    double exec_time = getExecutionTime() - m_appFrameStart;
-		    double sleep_time = 1.0 / (double)m_appHeadlessFps - exec_time;
-
-		    std::this_thread::sleep_for(
-			std::chrono::duration<double>(
-			    sleep_time));
-		}
-            }
+	    if(m_windows.size() == 0)
+	    {                        
+		m_appHeadless = true;
+		m_timeTillNextAnnouncement = 0.f;
+	    }
+	    else
+		initGfx();
 	    
-            m_deltaTime = getExecutionTime() - m_appFrameStart;
-        }
+	    m_scheduler->start();
+	    while(m_appRunning)
+	    {
+		beginFrame();
+
+		for(int i = 0; i < m_windows.size(); i++) {
+		    Window* window = m_windows.at(i);
+		    window->frame();
+
+		    if(window->m_shouldClose)
+		    {
+			m_windows.erase(m_windows.begin() + i);
+			if(m_windows.size() == 0 && m_appRunning)
+			{
+			    DEV_MSG("last window closed, entering headless mode");
+			    m_appHeadless = true;
+			    m_timeTillNextAnnouncement = 0.f;
+			}
+
+			delete window;
+			break;
+		    }
+		}
+		
+		endFrame();
+	    }
+	}
+	catch (std::exception& ex)
+	{
+	    DEV_ERROR("%s", ex.what());
+	}
+	catch(...)
+	{
+	    DEV_ERROR("unknown error");
+	}
 
     cleanup:
         DEV_MSG("cleaning up");
+	cleanup();
 
-	if(m_scheduler)
-	    m_scheduler->stop();
-	
-        stop();
-
-        // clean up time
-        for(int i = 0; i < m_windows.size(); i++)
-        {
-            Window* window = m_windows.at(i);
-            DEV_MSG("shutting down window %i", i);
-            delete window;
-        }        
-
-        INFO_MSG("goodbye");
+        INFO_MSG("goodbye, %i warnings and %i errors",
+		 console->getNumWarnMessages(),
+		 console->getNumErrorMessages());
 
         return 0;
     }
@@ -263,6 +328,70 @@ namespace mtx
         return nWnd;
     }
 
+    void App::beginFrame()
+    {
+	m_appFrameStart = getExecutionTime();
+
+	if(m_windows.size() != 0)
+	    tickGfx();
+
+	App::getHWAPI()->frameStart();
+    }
+
+    void App::endFrame()
+    {
+	int p = 0;
+
+	if(m_appHeadless)
+	{
+	    if(m_timeTillNextAnnouncement < m_appFrameStart)
+	    {
+		INFO_MSG("Time: %f, Tick DT: %f, Ticks/Second: %f%s",
+			 getExecutionTime(),
+			 getSchedulerTime(),
+			 1.0 / getSchedulerTime(),
+			 m_headlessStatus.c_str());
+		m_timeTillNextAnnouncement = m_appFrameStart + 5.f;
+	    }
+	    if(m_appHeadlessFps != 0)
+	    {
+		double exec_time = getExecutionTime() - m_appFrameStart;
+		double sleep_time = 1.0 / (double)m_appHeadlessFps - exec_time;
+
+		std::this_thread::sleep_for(
+		    std::chrono::duration<double>(
+			sleep_time));
+	    }
+	}
+	    
+	m_deltaTime = getExecutionTime() - m_appFrameStart;
+    }
+
+    void App::cleanup()
+    {
+	if(m_scheduler)
+	    m_scheduler->stop();
+	
+	try {	    
+	    stop();
+	}
+	catch(std::exception& ex)
+	{
+	    DEV_ERROR("%s", ex.what());
+	}
+	catch(...)
+	{
+	    DEV_ERROR("unknown error");
+	}
+
+        for(int i = 0; i < m_windows.size(); i++)
+        {
+            Window* window = m_windows.at(i);
+            DEV_MSG("shutting down window %i", i);
+            delete window;
+        }        
+    }
+
     Window::Window()
     {
         m_shouldClose = false;
@@ -284,7 +413,8 @@ namespace mtx
             
             DEV_ASSERT(viewport->getCameraNode());
 
-            if(viewport->getCameraNode() && viewport->getCameraNode()->getScene())
+            if(viewport->getCameraNode() &&
+	       viewport->getCameraNode()->getScene())
             {
                 viewport->updateView();
 
@@ -294,13 +424,25 @@ namespace mtx
                 rp.data.m4 = viewport->getPerspective();
                 rp.type = HWT_MATRIX4;                
                 App::getHWAPI()->pushParam(rp);
+		
+                rp.name = "projection_inverse";
+                rp.data.m4 = viewport->getPerspectiveInverse();
+                rp.type = HWT_MATRIX4;                
+                App::getHWAPI()->pushParam(rp);
 
                 rp.name = "view";
                 rp.data.m4 = viewport->getView();
                 rp.type = HWT_MATRIX4;
                 App::getHWAPI()->pushParam(rp);
+		
+                rp.name = "view_inverse";
+                rp.data.m4 = viewport->getViewInverse();
+                rp.type = HWT_MATRIX4;
+                App::getHWAPI()->pushParam(rp);
 
-                viewport->getCameraNode()->getScene()->renderScene(viewport->getCameraNode());
+                viewport->getCameraNode()
+		    ->getScene()
+		    ->renderScene(viewport->getCameraNode());
             }
 
             App::getHWAPI()->clearParams();

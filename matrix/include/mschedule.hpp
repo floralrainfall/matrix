@@ -43,6 +43,9 @@ namespace mtx
 	void setPaused(bool pause) { m_paused = pause; }
 	double getDeltaTime() { return m_deltaTime; }
 
+	// if NULL, then not in any sched tasks
+	SchedulerTask* getCurrentTask();
+
 	void newTask(std::string name, SchedulerMethod method);
     };
 }

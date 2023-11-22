@@ -11,6 +11,9 @@ namespace mtx
 
     Material::Material(const char* file)
     {
+	DEV_MSG("creating material %s, hwapi prefix: %s",
+		file,
+		App::getHWAPI()->getShaderPrefix().c_str());
         m_file = new ConfigFile(file);
         m_program = 0;
         Material* inheritedMaterial = NULL;
@@ -27,35 +30,49 @@ namespace mtx
             DEV_MSG("inherited material %s", inherit.c_str());
         }
 
-        std::string vf = m_file->getValue("glvertex");
+	std::string prefix = App::getHWAPI()->getShaderPrefix();
+	
+        std::string vf = m_file->getValue((prefix + "vertex").c_str());
         if(vf != "null")
             addShader(HWProgramReference::HWPST_VERTEX, vf);
         else if(inheritedMaterial)
         {
-            vf = inheritedMaterial->m_file->getValue("glvertex");
+            vf = inheritedMaterial->m_file->getValue((prefix + "vertex").c_str());
             if(vf != "null")
                 addShader(HWProgramReference::HWPST_VERTEX, vf);
+	    else
+		DEV_SOFTWARN("inherited material has no vertex shader");
         }
+	else
+	    DEV_SOFTWARN("material has no vertex shader");
 
-        std::string ff = m_file->getValue("glfragment");
+        std::string ff = m_file->getValue((prefix + "fragment").c_str());
         if(ff != "null")
             addShader(HWProgramReference::HWPST_FRAGMENT, ff);
         else if(inheritedMaterial)
         {
-            ff = inheritedMaterial->m_file->getValue("glfragment");
+            ff = inheritedMaterial->m_file->getValue((prefix + "fragment").c_str());
             if(ff != "null")
                 addShader(HWProgramReference::HWPST_FRAGMENT, ff);
+	    else
+		DEV_SOFTWARN("inherited material has no fragment shader");
         }
+	else
+	    DEV_SOFTWARN("material has no fragment shader");
 
-        std::string gf = m_file->getValue("glgeometry");
+        std::string gf = m_file->getValue((prefix + "geometry").c_str());
         if(gf != "null")
             addShader(HWProgramReference::HWPST_GEOMETRY, gf);
         else if(inheritedMaterial)
         {
-            gf = inheritedMaterial->m_file->getValue("glgeometry");
+            gf = inheritedMaterial->m_file->getValue((prefix + "geometry").c_str());
             if(gf != "null")
                 addShader(HWProgramReference::HWPST_GEOMETRY, gf);
+	    else
+		DEV_MSG("inherited material has no geometry shader");
         }
+	else
+	    DEV_MSG("material has no geometry shader");
 
         m_program->link();
     }
@@ -82,11 +99,11 @@ namespace mtx
         {
             char fshader[65535];
             std::memset(fshader, 0, 65535);
-            fread(fshader, 1, 65535, fo);
+            int read = fread(fshader, 1, 65535, fo);
             fclose(fo);
             
             DEV_MSG("adding shader %s", fpath.c_str());
-            m_program->addShader(type, fshader);
+            m_program->addShader(type, fshader, read);
         }
     }
 

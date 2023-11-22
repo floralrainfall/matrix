@@ -9,14 +9,24 @@ namespace mtx
     
     ConVar::ConVar(std::string name,
 		   std::string desc,
-		   std::string initial)
+		   std::string initial,
+		   ConVarChangeFunction change)
     {
 	m_name = name;
 	m_desc = desc;
 	m_value = initial;
+	m_changeFunction = change;
 
 #ifdef CONVAR_ENABLE
-	App::conVarManager->registerConVar(this);
+	if(App::conVarManager)
+	{
+	    App::conVarManager->registerConVar(this);
+	}
+	else
+	{
+	    App::conVarManager = new ConVarManager();
+	    App::conVarManager->registerConVar(this);
+	}
 #endif
     }
 
@@ -97,6 +107,8 @@ namespace mtx
     void ConVar::setFloat(float f)
     {
 	m_value = std::to_string(f);
+	if(m_changeFunction)
+	    m_changeFunction(this);
     }
 
     void ConVar::setInt(int i)

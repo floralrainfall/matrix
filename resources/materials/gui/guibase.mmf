@@ -1,3 +1,3 @@
 # Base GUI Material
-glvertex=shaders/gui/gui.vert
+gl3vertex=shaders/gui/gui.vert
 reference=true

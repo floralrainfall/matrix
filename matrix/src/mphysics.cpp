@@ -36,6 +36,11 @@ namespace mtx
         m_world->addRigidBody(body);
     };
 
+    void PhysicsWorld::removeRigidBody(btRigidBody* body)
+    {
+	m_world->removeRigidBody(body);
+    }
+    
     RigidBody::RigidBody(btCollisionShape* shape, btScalar mass)
     {
         m_motionState = new btDefaultMotionState();

@@ -26,7 +26,8 @@ namespace mtx
         m_currentClusterIndex = 0;
         m_useVis = true;
 	m_skybox = NULL;
-        if(bspfile)
+	m_physicsWorld = NULL;
+	if(bspfile)
         {
             std::fread(&m_header, sizeof(BSPHeader), 1, bspfile);
             DEV_MSG("bsp version %02x", m_header.version);
@@ -47,6 +48,20 @@ namespace mtx
             BSPNode* root = (BSPNode*)direntData[BSP_NODES];
             parseTreeNode(root, true, false);
         }
+    }
+
+    BSPFile::~BSPFile()
+    {
+	if(m_physicsWorld)
+	    removeFromPhysicsWorld(m_physicsWorld);
+	if(m_gfxEnabled)
+	{
+	    for(BSPFaceModel model : m_models)
+	    {
+		delete model.m_buffer;
+		delete model.m_index;
+	    }
+	}
     }
 
     void BSPFile::readEntitesLump(BSPDirentry* dirent)
@@ -174,7 +189,12 @@ namespace mtx
         BSPTexture texture = ((BSPTexture*)direntData[BSP_TEXTURES])[face->texture];
 
         if(texture.name == std::string("textures/skies/skybox")) // TODO: make this not hardcoded
-            m.m_program = Material::getMaterial("materials/bsp/sky.mmf")->getProgram();
+	{
+            m.m_program =
+		Material::getMaterial("materials/bsp/sky.mmf")->getProgram();
+
+	    m.m_texture = m_skybox;
+	}
         else
         {
             m.m_program = Material::getMaterial("materials/bsp/bsp.mmf")->getProgram();
@@ -323,6 +343,18 @@ namespace mtx
         }
     }
 
+    void BSPFile::removeFromPhysicsWorld(PhysicsWorld* world)
+    {
+	for(btRigidBody* body : m_brushBodies)
+	{
+	    delete body->getMotionState();
+	    delete body->getCollisionShape();
+	    world->removeRigidBody(body);
+	    delete body;
+	}
+	m_brushBodies.clear();
+    }
+
     void BSPFile::addToPhysicsWorld(PhysicsWorld* world)
     {
         int rb_added = 0;
@@ -364,10 +396,12 @@ namespace mtx
                 btRigidBody* brushbody = new btRigidBody(0.f, NULL, brushshape);
                 brushbody->setUserPointer(this);
                 world->addRigidBody(brushbody);
+		m_brushBodies.push_back(brushbody);
                 rb_added++;
             }
         }
         DEV_MSG("added %i brushes to physicsworld", rb_added);
+	m_physicsWorld = world;
     }
 
     int BSPFile::getCluster(glm::vec3 p)
@@ -390,12 +424,12 @@ namespace mtx
         return -1;
     }
 
+    ConVar r_bspnoclustervis("r_bspnoclustervis", "", "0");
+
     bool BSPFile::canSeeCluster(int x, int y)
     {
-        if(x == -1)
-            return false;
-        if(y == -1)
-            return false;
+        if(x == -1 || y == -1)
+            return r_bspnoclustervis.getBool();
 
         BSPVisdata* vdata = (BSPVisdata*)direntData[BSP_VISDATA];
         return vdata->data[x * vdata->sz_vecs + y / 8] & (1 << y % 8);
@@ -413,6 +447,17 @@ namespace mtx
     {
         m_gfxEnabled = true;
 
+	m_skybox = App::getHWAPI()->newTexture();
+	char* cubemap_textures[] = {
+	    "textures/skybox/gen0/positive_x.png",
+	    "textures/skybox/gen0/negative_x.png",
+	    "textures/skybox/gen0/positive_y.png",
+	    "textures/skybox/gen0/negative_y.png",
+	    "textures/skybox/gen0/negative_z.png",
+	    "textures/skybox/gen0/positive_z.png", 
+	};
+	m_skybox->loadCubemap(cubemap_textures);
+				
         BSPNode* root = (BSPNode*)direntData[BSP_NODES];
         parseTreeNode(root, false, true);
     }
@@ -425,16 +470,19 @@ namespace mtx
 
     void BSPComponent::renderComponent()
     {
-        if(!m_bspFile->getGfxEnabled())
-            return;
         if(m_bspFile)
-            m_bspFile->hwapiDraw(0);
+	{
+	    if(!m_bspFile->getGfxEnabled())
+		return;
+	    m_bspFile->hwapiDraw(0);
+	}
     }
 
     void BSPComponent::tick()
     {
-        if(m_camera && m_bspFile->getUsingVis())
-            m_bspFile->updatePosition(m_camera->getTransform().getPosition());
+	if(m_bspFile)
+	    if(m_camera && m_bspFile->getUsingVis())
+		m_bspFile->updatePosition(m_camera->getTransform().getPosition());
         m_node->setOccludes(false);
     }
 }

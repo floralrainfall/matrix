@@ -9,7 +9,6 @@
 #include <mphysics.hpp>
 #include <mwweb.hpp>
 #include <mwuser.hpp>
-#include <hw/msdl.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <format>
 
@@ -106,8 +105,10 @@ public:
     RDMNetListener* m_netListenerServer;
     RDMNetListener* m_netListenerClient;
     mtx::GUITextComponent* m_guiShipStatus;
+    mtx::GUIImageComponent* m_guiBackgroundImage;
     mtx::PhysicsWorld* m_physworld;
     mtx::BSPFile* bsp;
+    mtx::BSPComponent* bspmodel;
     mtx::RigidBody* ballBody;
     mtx::world::WebService* m_webService;
 
@@ -124,6 +125,7 @@ public:
     float m_cameraPitch;
 
     glm::vec3 cameraps;
+    glm::vec3 velocity;
 
     RDMApp(int argc, char** argv) : App(argc, argv)
     {
@@ -131,9 +133,18 @@ public:
     }
     
     virtual void init() {
-        m_serverSceneManager = new mtx::SceneManager(this);
+	std::string launch_mode =
+	    rdm_launch_mode.getString();
+	if(launch_mode == "server")
+	    launchMode = LAUNCH_SERVER;
+	else
+	    launchMode = LAUNCH_CLIENT;
+
+	m_serverSceneManager = new mtx::SceneManager(this);
         m_clientSceneManager = new mtx::SceneManager(this);
 	m_webService = new mtx::world::WebService();
+	bsp = 0;
+	velocity = glm::vec3(0);
 
 	getScheduler()->setPaused(true);
 	
@@ -147,7 +158,13 @@ public:
             server = newServer(hostaddress);
 
 
-            m_netListenerServer = new RDMNetListener(m_serverSceneManager);
+            m_netListenerServer = new
+		RDMNetListener(m_serverSceneManager);
+
+	    bsp = new mtx::BSPFile("rdm/rdm/maps/ffa_me2.bsp");
+
+	    m_netListenerServer->m_currentMap =
+		bsp;
             server->setEventListener(m_netListenerServer);
 
 	    getScheduler()->setPaused(false);
@@ -181,6 +198,8 @@ public:
 
         m_physworld = new mtx::PhysicsWorld();
         m_serverSceneManager->getRootNode()->addComponent(m_physworld);
+	if(bsp)
+	    bsp->addToPhysicsWorld(m_physworld);
 
         m_eventListener = new RDMListener(this);
         App::getHWAPI()->addListener(m_eventListener);
@@ -203,9 +222,7 @@ public:
             if(!ballBody)
                 ballBody = _ballBody;
         } */
-
-        bsp = new mtx::BSPFile("rdm/rdm/maps/ffa_me2.bsp");
-        bsp->addToPhysicsWorld(m_physworld);
+	
         cameraps = glm::vec3(0,0,0);
 
         // TODO: RDMOcclusionTester (and thus the BSP testing solution) is too slow at the moment
@@ -217,12 +234,17 @@ public:
     }
 
     virtual void initGfx() {
+	App::getHWAPI()->loadResources();
+	
 	m_netListenerClient->loadResources();
         m_uiSceneManager = new mtx::SceneManager(this);
         // m_window->getHwWindow()->setGrab(true);
-    
+
         m_uiViewport = new mtx::Viewport(640, 480);
         m_uiViewport->setClearColor(glm::vec4(0));
+
+	mtx::ViewportSettings& uiVpSettings = m_uiViewport->getSettings();
+	uiVpSettings.enableDepthTest = false;
 
         cameraNode = new mtx::SceneNode();
         cameraNode->setParent(m_clientSceneManager->getRootNode());
@@ -253,36 +275,44 @@ public:
         healthTf.setPosition(glm::vec3(-8,-8,10));
 
         mtx::SceneNode* guiNode = new mtx::SceneNode();
-        mtx::SceneNode* logoNode = new mtx::SceneNode();
         m_guiShipStatus = new mtx::GUITextComponent();
         m_guiShipStatus->setText("RDM alpha");
         m_guiShipStatus->setFont(App::getHWAPI( )->loadCachedTexture("textures/font.png"));
-        m_guiShipStatus->setOffset(glm::vec3(0.0, 480.0 - 16.0, 0.0));
+        m_guiShipStatus->setOffset(glm::vec3(0.0, 480.0 - 16.0, 0.1));
         m_guiShipStatus->setCharacterSize(glm::ivec2(8,16));
-        guiNode->addComponent(m_guiShipStatus);
         guiNode->setParent(m_uiSceneManager->getRootNode());
 
         mtx::GUIImageComponent* logoImage = new mtx::GUIImageComponent("textures/entropy_interactive_small.png");
-        logoNode->addComponent(logoImage);
-        logoNode->setParent(m_uiSceneManager->getRootNode());
+	logoImage->setOffset(glm::vec3(0.0,0.0,0.1));
 
+	m_guiBackgroundImage = new
+	    mtx::GUIImageComponent("textures/rdm/background.png");
+	m_guiBackgroundImage->setOffset(glm::vec3(0.0,0.0,0.9));
+	m_guiBackgroundImage->setAbsoluteSize(true);
+	
+	guiNode->addComponent(m_guiBackgroundImage);
+        guiNode->addComponent(logoImage);
+        guiNode->addComponent(m_guiShipStatus);
+	
         m_uiSceneManager->setSunDirection(glm::vec3(1,1,1));
 
-        bsp->initGfx();
+    	App::console->initGfx(m_uiSceneManager, m_uiViewport);
 
-        mtx::SceneNode* mapNode = new mtx::SceneNode();
-        mtx::BSPComponent* mapComponent = new mtx::BSPComponent(bsp);
-        mapNode->addComponent(mapComponent);
-        mapNode->setParent(m_clientSceneManager->getRootNode());
+	mtx::SceneNode* bspnode = new mtx::SceneNode();
+	bspmodel = new mtx::BSPComponent(NULL);
+	bspnode->addComponent(bspmodel);
+	bspnode->setParent(m_clientSceneManager->getRootNode());
     }
-
+    
     virtual void tickGfx()
     {
+	App::console->tickGfx();
+	
         mtx::SceneTransform& cameratf = cameraNode->getTransform();
         cameratf.setPosition(cameraps);
 
 
-	if(client->getOnline())
+	if(m_netListenerClient->getGameReady())
 	{
 	    m_cameraYaw += m_eventListener->xrel * getDeltaTime();
 	    m_cameraPitch += m_eventListener->yrel * getDeltaTime();
@@ -290,7 +320,7 @@ public:
 	    m_eventListener->yrel = 0.f;
 
 	    float clock = 1.5f;
-	    m_cameraPitch = SDL_clamp(m_cameraPitch, -clock, clock);
+	    // m_cameraPitch = SDL_clamp(m_cameraPitch, -clock, clock);
 	}
 	
         glm::quat qx = glm::angleAxis(m_cameraPitch, glm::vec3(1,0,0));
@@ -300,25 +330,26 @@ public:
         glm::vec3 front = glm::vec3(0, 1, 0) * qf;
         glm::vec3 right = glm::vec3(1, 0, 0) * qf;
 
-	if(client->getOnline())
-	{
+	//if(m_netListenerClient->getGameReady())
+	//{
 	    float movespeed = 64.f;
 	    static bool debounce;
 	    if(m_eventListener->keysDown['w'])
-		cameraps += movespeed * front * (float)getDeltaTime();
+		velocity += movespeed * front * (float)getDeltaTime();
 	    if(m_eventListener->keysDown['s'])
-		cameraps -= movespeed * front * (float)getDeltaTime();
+		velocity -= movespeed * front * (float)getDeltaTime();
 	    if(m_eventListener->keysDown['a'])
-		cameraps -= movespeed * right * (float)getDeltaTime();
+		velocity -= movespeed * right * (float)getDeltaTime();
 	    if(m_eventListener->keysDown['d'])
-		cameraps += movespeed * right * (float)getDeltaTime();
+		velocity += movespeed * right * (float)getDeltaTime();
+	    velocity *= 0.99;
+	    cameraps += velocity * (float)getDeltaTime();
 	    cameratf.setWorldMatrix(glm::lookAt(
 					cameraps,
 					front + cameraps,
 					glm::vec3(0,0,1)));
-	}
-
-        bsp->updatePosition(cameraps);
+	    //}
+	
         if(m_netListenerClient->m_localPlayer)
         {
             if(glm::distance(cameraps,m_netListenerClient->m_localPlayer->position) > 0.1 ||
@@ -335,32 +366,34 @@ public:
             }
         }
 
-	if(client->getOnline())
+	if(m_netListenerClient->getGameReady())
 	{	    
 	    char statustx[1024];
 	    snprintf(statustx, 1024, "RDM alpha\n"
-		     "m_useVis: %s, vis cluster: %i\n"
-		     "faces: %i/%i, leafs: %i/%i\n"
 		     "vertices: %i, calls: %i\n"
 		     "%f, %f, %f %f %f, %f %f %f\n"
 		     "Dt=%f T=%f Ping=%ims\n"
 		     "Net Loss=%i, Sent=%i, Lost=%i\n"
 		     "PDt=%f",
-		     bsp->getUsingVis() ? "true" : "false",
-		     bsp->getVisCluster(),
-		     bsp->getFacesRendered(), bsp->getFacesTotal(),
-		     bsp->getLeafsRendered(), bsp->getLeafsTotal(),
 		     App::getHWAPI()->getDrawnVertices(), App::getHWAPI()->getDrawCalls(),
 		     front.x, front.y, front.z, m_cameraYaw, m_cameraPitch, cameraps.x, cameraps.y, cameraps.z,
 		     getDeltaTime(), getExecutionTime(), client->getPeer()->lastRoundTripTime,
 		     client->getPeer()->packetLoss, client->getPeer()->packetsSent, client->getPeer()->packetsLost,
 		     m_physworld->getDeltaTime());
+	    
 	    m_guiShipStatus->setText(statustx);
+	    
+	    m_guiBackgroundImage->setVisible(false);
 	}
 	else
 	{
 	    char statustx[1024];
 
+	    glm::vec4 uiv = m_uiViewport->getViewport();
+	    m_guiBackgroundImage->setVisible(true);
+	    m_guiBackgroundImage->setSize(glm::vec2(uiv.z,
+						    uiv.w));
+					  
 	    if(menu_selectedItem == 0)
 	    {
 		if(m_eventListener->keysDown['1'])
@@ -388,10 +421,16 @@ public:
 		    enet_address_set_host_ip(&cliaddress, "127.0.0.1");
 		    cliaddress.port = 7936;
 
+		    m_guiBackgroundImage->setImageTexture(
+			App::getHWAPI()->loadCachedTexture("textures/rdm/background_plswait.png")
+			);
+		    
 		    client->tryConnect(cliaddress);
 		    getScheduler()->setPaused(false);
 
 		    menu_selectedItem = -1;
+
+		    mtx::App::console->setVisible(true);
 		}
 	    }
 	    else if(menu_selectedItem == 0)
@@ -399,6 +438,41 @@ public:
 
 	    }
 	    m_guiShipStatus->setText(statustx);
+	}
+
+	double time = getExecutionTime();
+	m_guiShipStatus->setColor(glm::vec4(
+				      (sinf(time+(M_PI * (1.0/3.0)))+1.0)/2.0,
+				      (sinf(time+(M_PI * (2.0/3.0)))+1.0)/2.0,
+				      (sinf(time+(M_PI * (3.0/3.0)))+1.0)/2.0,
+				      1.0));
+
+	if(client->getConnected())
+	{
+	    // we need to load bsps in the gfx/main thread so the
+	    // assets dont create themselves on Tick (which isnt
+	    // allowed)
+
+	    if(m_netListenerClient->m_pendingNewMap)
+	    {
+		m_netListenerClient->m_mapMutex.lock();
+		INFO_MSG("loading map resources");
+		m_netListenerClient->m_currentMap->initGfx();
+		INFO_MSG("loaded map resources");
+		if(bsp)
+		{
+		    DEV_MSG("unloading old map");
+		    delete bsp; // delete old bsp
+		}
+		bspmodel->setBSP(m_netListenerClient->m_currentMap);
+		bsp = m_netListenerClient->m_currentMap;
+		m_netListenerClient->m_pendingNewMap = false;
+
+		m_guiBackgroundImage->setColor(glm::vec4(0.25,0.25,0.25,0.5));
+		m_netListenerClient->m_mapMutex.unlock();
+
+		mtx::App::console->setVisible(false);
+	    }
 	}
     }
 
@@ -413,16 +487,35 @@ public:
 };
 
 
+
+#ifndef COMPILE_EXECUTABLE
+static mtx::App* __mainRoutine(int argc, char** argv)
+{
+    return new RDMApp(argc, argv);
+}
+
+extern "C" {
+    mtx::HLResponse* __MatrixMain(mtx::HLContext context)
+    {
+	mtx::HLResponse* rsp =
+	    (mtx::HLResponse*)malloc(sizeof(mtx::HLResponse));
+	switch(context.request)
+	{
+	case mtx::HLR_GET_MAIN_ROUTINE:
+	    rsp->status = mtx::HLS_SUCCESS;
+	    rsp->data.mainRoutine.routine = __mainRoutine;
+	    break;
+	default:
+	    rsp->status = mtx::HLS_UNSUPPORTED_REQUEST;
+	    break;
+	}
+	return rsp;
+    }
+}
+#else
 int main(int argc, char** argv)
 {
     RDMApp app = RDMApp(argc, argv);
-
-    std::string launch_mode =
-	rdm_launch_mode.getString();
-    if(launch_mode == "server")
-	app.launchMode = LAUNCH_SERVER;
-    else
-        app.launchMode = LAUNCH_CLIENT;
-
     return app.main();
 }
+#endif

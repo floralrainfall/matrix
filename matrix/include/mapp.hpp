@@ -41,6 +41,7 @@ namespace mtx
 
         void frame();
         void setShouldClose(bool c) { m_shouldClose = c; }
+	bool getShouldClose() { return m_shouldClose; }
         HWWindowReference* getHwWindow() { return m_hwWindow; }
     };
     
@@ -73,6 +74,18 @@ namespace mtx
     public:
         App(int argc = 0, char** argv = NULL);
 
+	std::vector<Window*>& getWindows()
+	{
+	    return m_windows;
+	}
+	std::vector<SceneManager*>& getSceneManagers() 
+	{
+	    return m_sceneManagers;
+	}
+	
+	static std::string getCompileString();
+	static std::string getExtraCompileInfoString();
+	
 	static ConVarManager* conVarManager;
 	static Console* console;
 	
@@ -113,13 +126,15 @@ namespace mtx
 	 * If this is set to false, the main loop will stop.
 	 */
         void setAppRunning(bool s) { m_appRunning = s; }
+	bool getAppRunning() { return m_appRunning; }
 
 	/**
 	 * If this is set to false, the headless status messages will
 	 * be printing.
 	 */
         void setAppHeadless(bool s) { m_appHeadless = s; }
-
+	bool getAppHeadless() { return m_appHeadless; }
+	
 	/**
 	 * Adds a scene manager to be automatically ticked by the App.
 	 */
@@ -160,6 +175,12 @@ namespace mtx
 	 * return code to the return of main().
 	 */
         int main();
+
+	// these functions are for creating your own event loop
+
+	void beginFrame();
+	void endFrame();
+	void cleanup();
 
         static HWAPI* getHWAPI() { return m_hwApi; }
         static FileSystem* getFileSystem() { return m_fileSystem; }

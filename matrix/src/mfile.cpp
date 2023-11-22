@@ -24,6 +24,9 @@ namespace mtx
 
     std::string FileSystem::fullPath(const char* file)
     {
+	if(file[0] == '/')
+	    return file;
+	
         std::FILE* f = 0;
         for(auto dir : m_searchDirectories)
         {
@@ -34,7 +37,7 @@ namespace mtx
                 return (dir + "/" + file);
             }
         }
-        DEV_MSG("could not find file %s", file);
+        DEV_SOFTWARN("could not find file %s", file);
         return file;
     }
 
@@ -47,7 +50,7 @@ namespace mtx
             if(f)
                 return f;
         }
-        DEV_MSG("could not open file %s mode %s", file, mode);
+        DEV_SOFTWARN("could not open file %s mode %s", file, mode);
         return NULL;
     }
 

@@ -50,12 +50,15 @@ namespace mtx
     {
     protected:
         ENetPeer* m_clientPeer;
+	bool m_connected;
     public:
         ENetPeer* getPeer() { return m_clientPeer; }
         // use App::newClient
         NetClient();
         NetClient(ENetPeer* peer);
 
+	void setConnected(bool c) { m_connected = c; }
+	bool getConnected() { return m_connected; }
         void tryConnect(ENetAddress address);
     };
 }

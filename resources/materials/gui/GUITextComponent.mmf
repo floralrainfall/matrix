@@ -1,2 +1,2 @@
 inherit=materials/gui/guibase.mmf
-glfragment=shaders/gui/GUITextComponent.frag
+gl3fragment=shaders/gui/GUITextComponent.frag

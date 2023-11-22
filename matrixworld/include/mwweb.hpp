@@ -46,7 +46,6 @@ namespace mtx::world
     {
         friend class WebServiceListener;
 
-        mtx::ConfigFile m_cfg;
         std::string m_httpbase;
         std::string m_motd;
 	/// this auth key should NOT be transmitted and stay local to
@@ -65,7 +64,7 @@ namespace mtx::world
     public:
         static void initCurl();
        
-        WebService(const char* cfg = "matrixworld.cfg");
+        WebService(const char* cfg = "WebService_Private.cfg");
         ~WebService();
 
         void addToApp(App* app);

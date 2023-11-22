@@ -24,6 +24,24 @@ namespace mtx
 	m_schedulerThread = std::thread(&Scheduler::exec, this);
     }
 
+    static void __scheduler_Method(App* app, SchedulerTask* task)
+    {
+	double start = app->getExecutionTime();
+	task->method(app);
+	task->deltaTime = app->getExecutionTime() - start;
+    }
+
+    SchedulerTask* Scheduler::getCurrentTask()
+    {
+	std::thread::id main_thread = std::this_thread::get_id();
+	for(int i = 0; i < m_tasks.size(); i++) {
+	    SchedulerTask* task = m_tasks[i];
+	    if(task && task->thread.get_id() == main_thread)
+		return task;
+	}
+	return NULL;
+    }
+
     void Scheduler::exec()
     {
 	while(!m_stopped)
@@ -31,7 +49,7 @@ namespace mtx
 	    float start_time = m_app->getExecutionTime();
 	    for(SchedulerTask* task : m_tasks)
 	    {
-		task->thread = std::thread(task->method, m_app);
+		task->thread = std::thread(__scheduler_Method, m_app, task);
 	    }
 	    
 	    for(SchedulerTask* task : m_tasks)

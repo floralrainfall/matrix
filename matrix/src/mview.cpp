@@ -3,6 +3,14 @@
 
 namespace mtx
 {
+    ViewportSettings::ViewportSettings()
+    {
+	enableBlending = true;
+	enableDepthTest = true;
+	enableCullFace = true;
+	enableFillMode = true;
+    }
+    
     Viewport::Viewport(int resx, int resy)
     {
         m_viewport = glm::vec4(0.f);
@@ -20,6 +28,7 @@ namespace mtx
 
     void Viewport::beginViewportFrame()
     {
+	App::getHWAPI()->gfxBeginFrame(this);
         App::getHWAPI()->gfxViewport(m_viewport);
         if(m_clearColor.a != 0.0)
             App::getHWAPI()->gfxClear(m_clearColor);
@@ -42,7 +51,13 @@ namespace mtx
 
     void Viewport::updatePerspective()
     {
-        m_perspectiveMatrix = glm::perspectiveFov(90.f * ((float)M_PI / 180.f), m_viewport.z, m_viewport.w, m_nearDistance, m_farDistance);
+        m_perspectiveMatrix = glm::perspectiveFov(90.f * ((float)M_PI
+							  / 180.f),
+						  m_viewport.z,
+						  m_viewport.w,
+						  m_nearDistance,
+						  m_farDistance);
+	m_inversePerspective = glm::inverse(m_perspectiveMatrix);
     }
 
     void Viewport::updateView()
@@ -52,6 +67,7 @@ namespace mtx
             return;
         SceneTransform cameraTransform = camera->getTransform();
         m_viewMatrix = cameraTransform.getWorldMatrix();
+	m_inverseView = glm::inverse(m_viewMatrix);
         m_viewPosition = cameraTransform.getPosition();
         m_uiTransform = glm::ortho(0.f, m_viewport.z, 0.f, m_viewport.w);
     }

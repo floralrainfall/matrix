@@ -71,7 +71,9 @@ namespace mtx
 
         virtual ~HWProgramReference();
 
-        virtual void addShader(ShaderType type, const char* file) = 0;
+        virtual void addShader(ShaderType type,
+			       const char* file,
+			       size_t code_size) = 0;
         virtual void bind() = 0;
         virtual void link() = 0;
     };
@@ -87,11 +89,24 @@ namespace mtx
 
     };
 
+    enum HWTextureCubemapDirection
+    {
+	HWTCD_POSITIVE_X,
+	HWTCD_NEGATIVE_X,
+	HWTCD_POSITIVE_Y,
+	HWTCD_NEGATIVE_Y,
+	HWTCD_POSITIVE_Z,
+	HWTCD_NEGATIVE_Z,
+	__HWTCD_MAX
+    };
+
     class HWTextureReference
     {
     protected:
         glm::ivec2 m_textureSize;
 	HWTextureType m_type;
+	
+    	void setTextureType(HWTextureType type) { m_type = type; };
     public:
         virtual ~HWTextureReference();
 
@@ -99,8 +114,19 @@ namespace mtx
 
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
         virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true) = 0;
+	virtual void uploadCubemap(glm::ivec2 size,
+				   void* data,
+				   HWTextureCubemapDirection direction) {};
         bool uploadCompressedTexture(int size, void* data);
-    	void setTextureType(HWTextureType type) { m_type = type; };
+	bool uploadCompressedCubemap(int size, void* data,
+				     HWTextureCubemapDirection dir);
+
+	/**
+	 * Loads a cubemap.
+	 * @param cubemap_textures Should be 6 strings long (see
+	 * HWTextureCubemapDirection) for order
+	 */
+	void loadCubemap(char** cubemap_textures);
     };
 
     class Window;
@@ -164,11 +190,14 @@ namespace mtx
         virtual void upload() = 0;
     };
 
+    class Viewport;
+    
     class HWAPI
     {
     protected:
         std::map<std::string, HWTextureReference*> m_cachedTextures;
         std::deque<HWRenderParameter> m_hwParams; // when anything is drawn, these are applied as uniforms in OpenGL's case
+	HWTextureReference* m_whiteTexture;
 
         int m_drawnVertices;
         int m_drawCalls;
@@ -179,6 +208,8 @@ namespace mtx
         void pushParam(HWRenderParameter param);
         void popParam();
         void clearParams() { m_hwParams.clear(); }
+	void frameStart();
+	void loadResources();
 
         virtual void applyParamsToProgram(HWProgramReference* program) = 0;
 
@@ -186,7 +217,8 @@ namespace mtx
         {
             HWPT_POINTS,
             HWPT_LINES,
-            HWPT_TRIANGLES
+            HWPT_TRIANGLES,
+	    HWPT_TRIANGLE_STRIP,
         };
 
         enum MessageBoxType
@@ -307,20 +339,23 @@ namespace mtx
 	 * doesnt exist. Otherwise, return NULL if not found
 	 */
         HWTextureReference* loadCachedTexture(const char* texture,
-					      bool autoload = true);
+					      bool autoload = true);	
 	/**
 	 * Adds a texture to the cache. This is if you load a texture
 	 * from somewhere other then disk, but still want
 	 * mtx::HWAPI::loadCachedTexture to work.
 	 */
-        void addTextureToCache(HWTextureReference* texture, const char* name);
+        void addTextureToCache(HWTextureReference* texture,
+			       const char* name);
 
+	virtual void gfxBeginFrame(Viewport* viewport) {};
+	
         class EventListener
         {
         public:
-            virtual void onQuit() = 0;
-            virtual void onKeyDown(int key) = 0;
-            virtual void onKeyUp(int key) = 0;
+            virtual void onQuit() {};
+            virtual void onKeyDown(int key) {};
+            virtual void onKeyUp(int key) {};
 
             virtual void onWindowClose(Window* window) {};
             virtual void onWindowSize(int w, int h, Window* window) {};
@@ -337,14 +372,79 @@ namespace mtx
 
         int getDrawnVertices() { return m_drawnVertices; }
         int getDrawCalls() { return m_drawCalls; }
+
+	virtual std::string getShaderPrefix() { return "unknown"; }
+
+	HWTextureReference* getWhiteTexture()
+	{
+	    return m_whiteTexture;
+	}
     private:
         std::vector<EventListener*> m_listeners;
     };
 
+
+    enum HLRequest
+    {
+	HLR_LIST_HWAPIS,
+	HLR_GET_MAIN_ROUTINE
+    };
+
+    enum HLStatus
+    {
+	HLS_SUCCESS,
+	HLS_UNSUPPORTED_REQUEST
+    };
+    
+    struct HLContext
+    {
+	HLRequest request;
+    };
+
+    class App;
+    typedef std::function<App*(int, char**)> MainRoutine;
     typedef std::function<HWAPI*()> HWAPIConstructor;
     template<typename T>
     T* HWAPIConstructorDefault()
     {
 	return new T();
     }
+    
+    struct HLHWAPIEntry
+    {
+	HWAPIConstructor ctor;
+	char* name;
+    };
+    
+    union HLResponseData
+    {
+	struct {
+	    HLHWAPIEntry* entries;
+	    int entryCount;
+	} listHwapis;
+	struct {
+	    MainRoutine routine;
+	} mainRoutine;
+    };
+
+    struct HLResponse
+    {
+	HLStatus status;
+	HLResponseData data;
+    };
+
+    // HLResponse should be freed by Matrix
+    typedef HLResponse* (*HLFunction)(HLContext);    
+    class HWAPILib
+    {
+#ifdef __unix__
+	void* m_hwnd;
+#endif
+	HLFunction m_hlFunc;
+    public:
+	HWAPILib(const char* hwapi_file);
+
+	std::map<std::string, HWAPIConstructor> getConstructors();
+	MainRoutine getMainRoutine();
+    };
 };

@@ -8,6 +8,8 @@ namespace mtx::world
 {
     static bool global_init = false;
 
+    ConVar mw_httpbase("mw_httpbase", "read only", "https://mw.endoh.ca/game");
+
     class WebServiceListener : public HWAPI::EventListener
     {
         WebService* m_webService;
@@ -34,18 +36,14 @@ namespace mtx::world
         }
     };
 
-    WebService::WebService(const char* cfg) : m_cfg(cfg)
+    WebService::WebService(const char* cfg) 
     {
         initCurl();
         m_sceneManager = 0;
         m_eventListener = 0;
 	m_currentUser = 0;
 
-        if(!m_cfg.getFound())
-            DEV_WARN("could not load WebService config file %s", cfg);
-        
-        m_httpbase = m_cfg.getValue("httpbase");
-        DEV_MSG("using httpbase %s", m_httpbase.c_str());
+        m_httpbase = mw_httpbase.getString();
 
         m_curl = curl_easy_init();
         curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeCallback);
@@ -56,8 +54,8 @@ namespace mtx::world
             DEV_MSG("MOTD: %s", motdresp.response);
             m_motd = motdresp.response;
 
-            ConfigFile logincfg = ConfigFile("WebService_Private.cfg");
-            if(!logincfg.getFound())
+            ConfigFile logincfg = ConfigFile(cfg);
+            if(!logincfg.getFound() && cfg)
                 DEV_WARN("You are missing your login configuration file! Please create one in any of your resources folders and configure it accordingly");
             std::string token = logincfg.getValue("user_token");
             if(token != "null")
@@ -69,7 +67,7 @@ namespace mtx::world
                 });
                 if(loginresp.httpcode != 200)               
                 {
-                    DEV_WARN("failed login '%s'", loginresp.response);
+                    DEV_WARN("failed login (%i) '%s'", loginresp.httpcode, loginresp.response);
                 }
                 else
                 {
@@ -144,6 +142,7 @@ namespace mtx::world
 
     WebServiceResponse WebService::getSync(const char* url)
     {
+	DEV_MSG("GET %s", url);
         CURL* pc = curl_easy_duphandle(m_curl);
         WebServiceResponse r;
         r.response = 0;
@@ -163,6 +162,7 @@ namespace mtx::world
 
     WebServiceResponse WebService::postSync(const char* url, std::map<std::string, std::string> multipart)
     {
+	DEV_MSG("POST %s", url);
         CURL* pc = curl_easy_duphandle(m_curl);
         WebServiceResponse r;
         r.response = 0;
@@ -191,6 +191,7 @@ namespace mtx::world
 
     WebServiceResponse WebService::postSync(const char* url, char* postdata)
     {
+	DEV_MSG("POST %s", url);
         CURL* pc = curl_easy_duphandle(m_curl);
         WebServiceResponse r;
         r.response = 0;

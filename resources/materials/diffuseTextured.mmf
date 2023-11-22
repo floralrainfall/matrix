@@ -1,2 +1,2 @@
-glvertex=shaders/diffuse.vert
-glfragment=shaders/diffuseTextured.frag
+gl3vertex=shaders/diffuse.vert
+gl3fragment=shaders/diffuseTextured.frag

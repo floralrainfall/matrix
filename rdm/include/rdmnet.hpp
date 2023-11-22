@@ -4,7 +4,9 @@
 #include <mmodel.hpp>
 #include <mmaterial.hpp>
 #include <mphysics.hpp>
+#include <mbsp.hpp>
 #include <glm/glm.hpp>
+#include <mutex>
 #include <map>
 
 struct RDMPlayer
@@ -22,7 +24,12 @@ struct RDMPlayer
 class RDMNetListener : public mtx::NetEventListener
 {
     void updatePlayerPhysicsPosition(RDMPlayer* player);
+    bool m_ready;
+    mtx::BSPComponent* m_mapComponent;
 public:
+    std::mutex m_mapMutex;
+    mtx::BSPFile* m_currentMap;
+    bool m_pendingNewMap;
     int m_lastPlayerId;
     mtx::SceneManager* m_scene; 
     std::map<int, RDMPlayer*> m_players;
@@ -35,4 +42,6 @@ public:
     virtual void onClientDisconnect(mtx::NetInterface* interface, mtx::NetClient* client);
     virtual void onReceive(mtx::NetInterface* interface, mtx::NetClient* client, ENetPacket* packet);
     virtual void onFrame(mtx::NetInterface* interface);
+
+    bool getGameReady() { return m_ready; };
 };

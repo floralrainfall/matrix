@@ -1,2 +1,4 @@
-glvertex=shaders/diffuse.vert
-glfragment=shaders/diffuse.frag
+gl3vertex=shaders/diffuse.gl3.vert
+gl3fragment=shaders/diffuse.gl3.frag
+vkvertex=shaders/diffuse.gl3.vert
+vkfragment=shaders/diffuse.gl3.frag

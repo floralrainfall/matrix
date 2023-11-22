@@ -9,6 +9,7 @@ namespace mtx::sdl
         DEV_MSG("initialized SDLAPI");
 
         m_firstWindow = 0;
+	m_receiveEvents = true;
 
         if(SDL_Init(SDL_INIT_VIDEO) < 0)
             DEV_WARN("couldnt initialize SDL");
@@ -16,9 +17,10 @@ namespace mtx::sdl
     
     void SDLAPI::pumpOSEvents()
     {
+	if(!m_receiveEvents)
+	    return;
+	
         SDL_Event e;
-        m_drawnVertices = 0;
-        m_drawCalls = 0;
         SDLWindow* window = NULL;
         
         while(SDL_PollEvent(&e))
@@ -111,11 +113,33 @@ namespace mtx::sdl
             SDL_DestroyWindow(m_sWind);
     }
     
+    ConVar r_sdlvsync("r_sdlvsync", "", "1");
+    
 #ifdef GL_ENABLED
+    void __r_sdlvsync_GL_Changed(ConVar* cvar)
+    {
+	bool vsync = cvar->getBool();
+	if(vsync)
+	{
+	    int r = SDL_GL_SetSwapInterval(-1);
+	    if(r == -1)
+	    {
+                DEV_SOFTWARN("OpenGL doesnt support adaptive vsync");
+                SDL_GL_SetSwapInterval(1);
+	    }
+	    else 
+		INFO_MSG("using adaptive vsync");
+	}
+	else
+	    SDL_GL_SetSwapInterval(0);
+    }
+    
     SDL_GLContext SDLGLWindow::m_glCtxt = 0;
     SDLGLAPI::SDLGLAPI() : SDLAPI()
     {
 	DEV_MSG("initialized SDLAPI... GL flavour");
+
+	r_sdlvsync.setChangeFunction(__r_sdlvsync_GL_Changed);
     }
 
     void SDLGLAPI::shutdown()
@@ -142,7 +166,7 @@ namespace mtx::sdl
         m_windows[SDL_GetWindowID(wref->getSDLRef())] = wref;
         return (HWWindowReference*)wref;
     }
-
+    
     void SDLGLWindow::createWindow(glm::ivec2 size, int type)
     {
         m_windowSize = size;
@@ -175,32 +199,35 @@ namespace mtx::sdl
 
         SDL_GL_MakeCurrent(m_sWind, m_glCtxt);
 
-        bool usevsync = false;
+        bool usevsync = r_sdlvsync.getBool();
 
         if(usevsync)
         {
             int r = SDL_GL_SetSwapInterval(-1);
             if(r == -1)
             {
-                DEV_MSG("OpenGL doesnt support adaptive vsync");
+                DEV_SOFTWARN("OpenGL doesnt support adaptive vsync");
                 SDL_GL_SetSwapInterval(1);
             }
             else 
-                DEV_MSG("using adaptive vsync");
+                INFO_MSG("using adaptive vsync");
         }
         else
             SDL_GL_SetSwapInterval(0);
             
-        DEV_MSG("OpenGL loaded");
-        DEV_MSG("vendor: %s", glGetString(GL_VENDOR))
-        DEV_MSG("renderer: %s", glGetString(GL_RENDERER));
-        DEV_MSG("version: %s", glGetString(GL_VERSION));
+        INFO_MSG("OpenGL loaded");
+        INFO_MSG("vendor: %s", glGetString(GL_VENDOR))
+        INFO_MSG("renderer: %s", glGetString(GL_RENDERER));
+        INFO_MSG("version: %s", glGetString(GL_VERSION));
 
         DEV_ASSERT(m_sWind);
         DEV_ASSERT(m_glCtxt);
 
         glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	
         glDepthFunc(GL_LESS);  
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
         glEnable(GL_CULL_FACE);
     }
@@ -220,10 +247,16 @@ namespace mtx::sdl
 
 #ifdef VK_ENABLED
 #define HWAPI_VK (dynamic_cast<vk::VKAPI*>(App::getHWAPI()))
+    
+    void __r_sdlvsync_VK_Changed(ConVar* cvar)
+    {
+	DEV_SOFTWARN("__r_sdlvsync_VK_Changed is not implemented");
+    }
+    
     SDLVKAPI::SDLVKAPI() : SDLAPI()
     {
 	DEV_MSG("initializing SDLVKAPI");
-	
+	r_sdlvsync.setChangeFunction(__r_sdlvsync_VK_Changed);
     }
 
     void SDLVKAPI::shutdown()
@@ -395,13 +428,56 @@ namespace mtx::sdl
 	createInfo.presentMode = present_mode;
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
-	vkCreateSwapchainKHR(HWAPI_VK->getDevice(),
-			     &createInfo,
-			     NULL,
-			     &m_swapChain);
-	
-	bool swap_chain_possible = false;
-	
+	if(vkCreateSwapchainKHR(HWAPI_VK->getDevice(),
+				&createInfo,
+				NULL,
+				&m_swapChain) != VK_SUCCESS)
+	{
+	    DEV_WARN("could not create vulkan swap chain");
+	}
+	else
+	    DEV_MSG("created swap chain");
+
+	unsigned int swap_image_count;
+	vkGetSwapchainImagesKHR(HWAPI_VK->getDevice(),
+				m_swapChain,
+				&swap_image_count,
+				NULL);
+	m_swapChainImages.resize(swap_image_count);
+	m_swapChainImageViews.resize(swap_image_count);
+	vkGetSwapchainImagesKHR(HWAPI_VK->getDevice(),
+				m_swapChain,
+				&swap_image_count,
+				m_swapChainImages.data());
+
+	for(int i = 0; i < m_swapChainImages.size(); i++)
+	{
+	    VkImageViewCreateInfo imCreateInfo{};
+	    imCreateInfo.sType =
+		VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	    imCreateInfo.image =
+		m_swapChainImages[i];
+	    imCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	    imCreateInfo.format = surface_format.format;
+	    imCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	    imCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	    imCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	    imCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	    imCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	    imCreateInfo.subresourceRange.baseMipLevel = 0;
+	    imCreateInfo.subresourceRange.levelCount = 1;
+	    imCreateInfo.subresourceRange.baseArrayLayer = 0;
+	    imCreateInfo.subresourceRange.layerCount = 1;
+
+	    if(vkCreateImageView(HWAPI_VK->getDevice(),
+				 &imCreateInfo, NULL,
+				 &m_swapChainImageViews[i]) !=
+				 VK_SUCCESS)
+	    {
+		DEV_ERROR("could not create image view");
+	    }
+	}
+	DEV_MSG("created %i swap chain views", m_swapChainImages.size());
     }
 
     void SDLVKWindow::beginFrame()
@@ -432,3 +508,39 @@ namespace mtx::sdl
         SDL_SetWindowTitle(m_sWind, title);
     }
 }
+
+#ifdef MODULE_COMPILE
+static mtx::HLHWAPIEntry hwapi_entries[] = {
+#ifdef GL_ENABLED
+    {
+	.ctor = mtx::HWAPIConstructorDefault<mtx::sdl::SDLGLAPI>,
+	.name = "sdl::SDLGLAPI"
+    },
+#endif
+#ifdef VK_ENABLED
+    {
+	.ctor = mtx::HWAPIConstructorDefault<mtx::sdl::SDLVKAPI>,
+	.name = "sdl::SDLVKAPI"
+    }
+#endif
+};
+
+extern "C" {
+    mtx::HLResponse* __MatrixMain(mtx::HLContext context)
+    {
+	mtx::HLResponse* rsp = (mtx::HLResponse*)malloc(sizeof(mtx::HLResponse));
+	switch(context.request)
+	{
+	case mtx::HLR_LIST_HWAPIS:
+	    rsp->status = mtx::HLS_SUCCESS;
+	    rsp->data.listHwapis.entries = hwapi_entries;
+	    rsp->data.listHwapis.entryCount = sizeof(hwapi_entries) / sizeof(mtx::HLHWAPIEntry);
+	    break;
+	default:
+	    rsp->status = mtx::HLS_UNSUPPORTED_REQUEST;
+	    break;
+	}
+	return rsp;
+    }
+}
+#endif

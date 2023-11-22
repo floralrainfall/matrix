@@ -1,6 +1,7 @@
 #include <hw/mgl.hpp>
 #include <mapp.hpp>
 #include <mdev.hpp>
+#include <mview.hpp>
 #include <sstream>
 
 #define HWAPI_GL (dynamic_cast<GL3API*>(App::getHWAPI()))
@@ -35,6 +36,8 @@ namespace mtx::gl
     
     void GLTexture::upload(glm::ivec2 size, void* data, bool genMipMaps)
     {
+	setTextureType(HWTT_TEXTURE2D);
+	
 	GLenum slot = getBuffer();
         glBindTexture(slot, m_glTextureId);
         HWAPI_GL->checkError();
@@ -66,6 +69,8 @@ namespace mtx::gl
 
     void GLTexture::uploadRGB(glm::ivec2 size, void* data, bool genMipMaps)
     {
+	setTextureType(HWTT_TEXTURE2D);
+	
 	GLenum slot = getBuffer();
         glBindTexture(slot, m_glTextureId);
         HWAPI_GL->checkError();
@@ -81,6 +86,47 @@ namespace mtx::gl
 
         m_textureSize = size;
 	m_uploadedTextures++;
+    }
+
+    void GLTexture::uploadCubemap(glm::ivec2 size,
+				  void* data,
+				  HWTextureCubemapDirection dir)
+    {
+	setTextureType(HWTT_TEXTURE_CUBEMAP);
+
+	GLenum slot = getBuffer();
+	glBindTexture(slot, m_glTextureId);
+	HWAPI_GL->checkError();
+
+	GLenum slot_sub;
+	switch(dir)
+	{
+	case HWTCD_POSITIVE_X:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+	    break;
+	case HWTCD_NEGATIVE_X:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_NEGATIVE_X;
+	    break;
+	case HWTCD_POSITIVE_Y:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
+	    break;
+	case HWTCD_NEGATIVE_Y:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;
+	    break;
+	case HWTCD_POSITIVE_Z:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
+	    break;
+	case HWTCD_NEGATIVE_Z:
+	    slot_sub = GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;
+	    break;
+	}
+	glTexImage2D(slot_sub, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+        glTexParameteri(slot, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(slot, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        HWAPI_GL->checkError();
+        m_textureSize = size;
+        glBindTexture(slot, 0);
     }
 
     GLBuffer::GLBuffer()
@@ -130,6 +176,9 @@ namespace mtx::gl
         case HWPT_TRIANGLES:
             glst = GL_TRIANGLES;
             break;
+	case HWPT_TRIANGLE_STRIP:
+	    glst = GL_TRIANGLE_STRIP;
+	    break;
         }
 
         if(program)
@@ -162,6 +211,9 @@ namespace mtx::gl
         case HWPT_TRIANGLES:
             glst = GL_TRIANGLES;
             break;
+	case HWPT_TRIANGLE_STRIP:
+	    glst = GL_TRIANGLE_STRIP;
+	    break;
         }
 
         if(program)
@@ -189,7 +241,9 @@ namespace mtx::gl
         glDeleteProgram(m_glProgramId);
     }
 
-    void GLProgram::addShader(ShaderType type, const char* code)
+    void GLProgram::addShader(ShaderType type,
+			      const char* code,
+			      size_t code_size)
     {
         GLuint glst = 0;
         switch(type)
@@ -343,14 +397,6 @@ namespace mtx::gl
 
     void GL3API::applyParamsToProgram(HWProgramReference* program)
     {
-	if(!m_whiteTexture)
-	{
-	    m_whiteTexture = newTexture();
-	    unsigned char image[] = {
-		0xff, 0xff, 0xff, 0xff
-	    };
-	    m_whiteTexture->upload(glm::ivec2(1,1), &image, false);
-	}
         int maxTextureIds;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureIds);
         for(auto prop : m_hwParams)
@@ -424,6 +470,27 @@ namespace mtx::gl
     {
         glClearDepth(depth);
         glClear(GL_DEPTH_BUFFER_BIT);
+    }
+
+    void GL3API::gfxBeginFrame(Viewport* viewport)
+    {
+	ViewportSettings settings = viewport->getSettings();
+	if(settings.enableBlending)
+	    glEnable(GL_BLEND);
+	else
+	    glDisable(GL_BLEND);
+	if(settings.enableDepthTest)
+	    glEnable(GL_DEPTH_TEST);
+	else
+	    glDisable(GL_DEPTH_TEST);
+	if(settings.enableCullFace)
+	    glEnable(GL_CULL_FACE);
+	else
+	    glDisable(GL_CULL_FACE);
+	if(settings.enableFillMode)
+	    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	else
+	    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);	    
     }
 
     HWBufferReference* GL3API::newBuffer()

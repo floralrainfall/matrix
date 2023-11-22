@@ -1,14 +1,15 @@
 #include <hw/mvk.hpp>
 #include <mapp.hpp>
 #include <mdev.hpp>
+#include <shaderc/shaderc.hpp>
 
 #define HWAPI_VK (dynamic_cast<VKAPI*>(App::getHWAPI()))
 
 namespace mtx::vk
 {
-    ConVar vk_applicationname = ConVar("vk_applicationname", "",
+    ConVar r_vkapplicationname = ConVar("r_vkapplicationname", "",
 				       "Matrix Game Window");
-    ConVar vk_enginename = ConVar("vk_enginename", "",
+    ConVar r_vkenginename = ConVar("r_vkenginename", "",
 				  "Matrix");
     
     VKAPI::VKAPI()
@@ -16,9 +17,9 @@ namespace mtx::vk
 	m_vkApp = {
 	    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 	    .pNext = NULL,
-	    .pApplicationName = vk_applicationname.getString().c_str(),
+	    .pApplicationName = r_vkapplicationname.getString().c_str(),
 	    .applicationVersion = 0,
-	    .pEngineName = vk_enginename.getString().c_str(),
+	    .pEngineName = r_vkenginename.getString().c_str(),
 	    .engineVersion = 0,
 	    .apiVersion = VK_API_VERSION_1_0,
 	};
@@ -175,8 +176,9 @@ namespace mtx::vk
 						 NULL,
 						 &dev_extension_loaded_count,
 						 NULL);
+	    DEV_MSG("%i extensions on device", dev_extension_loaded_count);
 	    std::vector<VkExtensionProperties>
-		dev_extension_properties(extension_loaded_count);
+		dev_extension_properties(dev_extension_loaded_count);
 	    vkEnumerateDeviceExtensionProperties(m_vkPhysicalDevice,
 						 NULL,
 						 &dev_extension_loaded_count,
@@ -309,7 +311,7 @@ namespace mtx::vk
 
     void VKBuffer::upload(int size, void* data)
     {
-
+	
     }
 
     HWBufferReference* VKAPI::newBuffer()
@@ -329,12 +331,12 @@ namespace mtx::vk
 
     void VKTexture::upload(glm::ivec2 size, void* data, bool genMipMaps)
     {
-
+	DEV_SOFTWARN("VKTexture::upload is not implemeted");
     }
 
     void VKTexture::uploadRGB(glm::ivec2 size, void* data, bool genMipMaps)
     {
-
+	DEV_SOFTWARN("VKTexture::uploadRGB is not implemented");
     }
 	
     HWTextureReference* VKAPI::newTexture()
@@ -345,7 +347,7 @@ namespace mtx::vk
 
     VKProgram::VKProgram()
     {
-
+	
     }
 
     VKProgram::~VKProgram()
@@ -353,19 +355,94 @@ namespace mtx::vk
 
     }
 
-    void VKProgram::addShader(ShaderType type, const char* code)
+    void VKProgram::addShader(ShaderType type,
+			      const char* code,
+			      size_t code_size)
     {
+	shaderc::Compiler compiler = shaderc::Compiler();
+	shaderc::CompileOptions options;
+	shaderc_shader_kind shader_kind;
+	switch(type)
+	{
+	case HWPST_VERTEX:
+	    shader_kind = shaderc_glsl_default_vertex_shader;
+	    break;
+	case HWPST_FRAGMENT:
+	    shader_kind = shaderc_glsl_default_fragment_shader;
+	    break;
+	case HWPST_GEOMETRY:
+	    shader_kind = shaderc_glsl_default_geometry_shader;
+	    break;
+	default:
+	    shader_kind = shaderc_glsl_infer_from_source;
+	    break;
+	}
+	
+	shaderc::SpvCompilationResult compilation_result =
+	    compiler.CompileGlslToSpv(code,
+				      code_size,
+				      shader_kind,
+				      "input.glsl");
 
+	switch(compilation_result.GetCompilationStatus())
+	{
+	case shaderc_compilation_status_success:
+	    break;
+	default:
+	    DEV_WARN("compilation failed: %s (%i)",
+		     compilation_result.GetErrorMessage().c_str(),
+		     compilation_result.GetCompilationStatus());
+	    break;
+	}
+	DEV_MSG("compiled shader, with %i warnings and %i errors",
+		compilation_result.GetNumWarnings(),
+		compilation_result.GetNumErrors());
+	
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType =
+	    VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = 0;
+	createInfo.pCode = &(*compilation_result.begin());
+
+	VkShaderModule shaderModule;
+	if(vkCreateShaderModule(HWAPI_VK->getDevice(),
+				&createInfo,
+				NULL,
+				&shaderModule) != VK_SUCCESS)
+	{
+	    DEV_ERROR("could not create shader module");
+	}
+
+	m_shaderModules[type] = shaderModule;
     }
 
     void VKProgram::bind()
     {
-
+	DEV_SOFTWARN("VKProgram::bind is not implemented");
     }
 
     void VKProgram::link()
     {
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType =
+	    VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage =
+	    VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = m_shaderModules[HWPST_VERTEX];
+	vertShaderStageInfo.pName = "main";
 
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType =
+	    VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = m_shaderModules[HWPST_FRAGMENT];
+
+	VkPipelineShaderStageCreateInfo stages[] = {
+	    vertShaderStageInfo,
+	    fragShaderStageInfo
+	};
+
+	
     }
 
     HWProgramReference* VKAPI::newProgram()

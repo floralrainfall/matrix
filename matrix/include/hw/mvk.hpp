@@ -30,11 +30,14 @@ namespace mtx::vk
 
     class VKProgram : public HWProgramReference
     {
+	std::map<ShaderType, VkShaderModule> m_shaderModules;
     public:
 	VKProgram();
 	virtual ~VKProgram();
 
-	virtual void addShader(ShaderType type, const char* code);
+	virtual void addShader(ShaderType type,
+			       const char* code,
+			       size_t code_size);
 	virtual void bind();
 	virtual void link();
     };
@@ -96,5 +99,7 @@ namespace mtx::vk
 	VkApplicationInfo* getApplicationInfo() { return &m_vkApp; }
 
 	VkInstance getInstance() { return m_vkInstance; }
+
+	virtual std::string getShaderPrefix() { return "vk"; }
     };
 }

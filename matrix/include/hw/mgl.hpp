@@ -31,6 +31,9 @@ namespace mtx::gl
 
         virtual void upload(glm::ivec2 size, void* data, bool genMipMaps = true);
         virtual void uploadRGB(glm::ivec2 size, void* data, bool genMipMaps = true);
+	virtual void uploadCubemap(glm::ivec2 size,
+				   void* data,
+				   HWTextureCubemapDirection direction);
 
         void setFilter(GLenum min, GLenum mag);
 
@@ -46,7 +49,9 @@ namespace mtx::gl
         GLProgram();
         virtual ~GLProgram();
 
-        virtual void addShader(ShaderType type, const char* code);
+        virtual void addShader(ShaderType type,
+			       const char* code,
+			       size_t code_size);
         virtual void bind();
         virtual void link();
 
@@ -71,7 +76,6 @@ namespace mtx::gl
     class GL3API : public virtual HWAPI
     {
         bool m_glReady;
-	HWTextureReference* m_whiteTexture;
     public:
         GL3API();
 
@@ -90,8 +94,12 @@ namespace mtx::gl
         virtual HWTextureReference* newTexture();
         virtual HWProgramReference* newProgram();
         virtual HWLayoutReference* newLayout();
+	
+	virtual void gfxBeginFrame(Viewport* viewport);
 
         bool getGlReady() { return m_glReady; }
         void setGlReady(bool gl) { m_glReady = gl; }
+
+	virtual std::string getShaderPrefix() { return "gl3"; }
     };
 };

@@ -1,5 +1,6 @@
 #include <rdmnet.hpp>
 #include <mphysics.hpp>
+#include <mapp.hpp>
 #include <mdev.hpp>
 
 static mtx::Material* playerMaterial;
@@ -11,6 +12,7 @@ enum PacketType
     RDMPAK_CURRENTPLAYERINFO,
     RDMPAK_DESTROYPLAYER,
     RDMPAK_PLAYERPOSITION,
+    RDMPAK_CHANGELEVEL,
     RDMPAK_MOTD,
 };
 
@@ -22,6 +24,9 @@ union packetdata {
     struct {
         char motd[128];
     } motd;
+    struct {
+	char level[128];
+    } changelevel;
     struct {
         int playerid;
         glm::vec3 position; // delta position
@@ -35,6 +40,10 @@ RDMNetListener::RDMNetListener(mtx::SceneManager* scene)
     m_scene = scene;
     m_lastPlayerId = 0;
     m_localPlayer = 0;
+    m_currentMap = 0;
+    m_mapComponent = 0;
+    m_ready = false;
+    m_pendingNewMap = false;
 }
 
 void RDMNetListener::loadResources()
@@ -96,13 +105,28 @@ void RDMNetListener::onClientConnect(mtx::NetInterface* interface, mtx::NetClien
         pt = (packetdata*)(motdpacket->data + 1);
         strncpy(pt->motd.motd, "Welcome to the world of RDM", 128);
         enet_peer_send(client->getPeer(), 0, motdpacket);
+	
+	DEV_ASSERT(m_currentMap);
+    
+        ENetPacket* levelpacket = enet_packet_create(0, sizeof(packetdata::changelevel) + 1, ENET_PACKET_FLAG_RELIABLE);
+        levelpacket->data[0] = RDMPAK_CHANGELEVEL;
+        pt = (packetdata*)(levelpacket->data + 1);
+        strncpy(pt->changelevel.level, m_currentMap->getName().c_str(), 128);
+        enet_peer_send(client->getPeer(), 0, levelpacket);
     }
 }
 
 void RDMNetListener::onClientDisconnect(mtx::NetInterface* interface, mtx::NetClient* client)
 {
-    RDMPlayer* player = (RDMPlayer*)client->getUserData();
-    m_players.erase(player->playerid);
+    if(interface->getServer())
+    {
+	RDMPlayer* player = (RDMPlayer*)client->getUserData();
+	m_players.erase(player->playerid);
+    }
+    else
+    {
+	DEV_SOFTWARN("client disconnected!");
+    }
 }
 
 void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* client, ENetPacket* packet)
@@ -153,10 +177,23 @@ void RDMNetListener::onReceive(mtx::NetInterface* interface, mtx::NetClient* cli
             m_players.erase(dt->playerinfo.playerid);
         }
         break;
+    case RDMPAK_CHANGELEVEL:
+	if(!interface->getServer())
+	{
+	    m_mapMutex.lock();
+	    INFO_MSG("changing level to %s", dt->changelevel.level);
+
+	    m_currentMap = new mtx::BSPFile(dt->changelevel.level); // we have to wait
+	    INFO_MSG("loaded map");
+	    m_pendingNewMap = true;
+	    m_ready = true;
+	    m_mapMutex.unlock();
+	}
+	break;
     case RDMPAK_MOTD:
         if(!interface->getServer())
         {
-            DEV_MSG("MOTD: %s", dt->motd.motd);
+            INFO_MSG("MOTD: %s", dt->motd.motd);
         }
         break;
     case RDMPAK_PLAYERPOSITION:

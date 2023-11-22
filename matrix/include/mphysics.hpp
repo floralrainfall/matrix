@@ -64,6 +64,7 @@ namespace mtx
         void setGravity(btVector3 v = {0, 0, -10});
         void addStaticObject(btCollisionObject* shape);
         void addRigidBody(btRigidBody* body);
+	void removeRigidBody(btRigidBody* body);
         double getDeltaTime() { return m_deltaTime; }
 
         virtual void tick();

@@ -62,8 +62,8 @@ namespace mtx
 	mtx::App::console->pushMessage(mtx::CL_WARN,			\
 				       mtx::tmp_dev_msg_buf2);		\
 									\
-	if(App::getHWAPI())						\
-	    App::getHWAPI()->showMessageBox("Matrix Warning",		\
+	if(mtx::App::getHWAPI())					\
+	    mtx::App::getHWAPI()->showMessageBox("Matrix Warning",	\
 					    mtx::tmp_dev_msg_buf2,	\
 					    mtx::HWAPI::HWMBT_WARNING);	\
     } 
@@ -78,8 +78,8 @@ namespace mtx
 	mtx::App::console->pushMessage(mtx::CL_ERROR,			\
 				       mtx::tmp_dev_msg_buf2);		\
 									\
-	if(App::getHWAPI())						\
-	    App::getHWAPI()->showMessageBox("Matrix Error",		\
+	if(mtx::App::getHWAPI())					\
+	    mtx::App::getHWAPI()->showMessageBox("Matrix Error",	\
 					    mtx::tmp_dev_msg_buf2,	\
 					    mtx::HWAPI::HWMBT_WARNING);	\
     } 

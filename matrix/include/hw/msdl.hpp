@@ -31,10 +31,14 @@ namespace mtx::sdl
     protected:
         SDLWindow* m_firstWindow;
         std::map<unsigned int, SDLWindow*> m_windows;
+	bool m_receiveEvents;
     public:
         SDLAPI();
         virtual void pumpOSEvents();
-	virtual void showMessageBox(const char* title, const char* message, MessageBoxType type = HWMBT_INFORMATION);	
+	virtual void showMessageBox(const char* title, const char*
+    message, MessageBoxType type = HWMBT_INFORMATION);
+	SDLWindow* getFirstWindow() { return m_firstWindow; }
+	void setReceiveEvents(bool b) { m_receiveEvents = b; }
     };
 
 #ifdef GL_ENABLED
@@ -46,6 +50,8 @@ namespace mtx::sdl
         virtual void createWindow(glm::ivec2 size, int type);
         virtual void beginFrame();
         virtual void endFrame();
+
+	static SDL_GLContext getGlContext() { return m_glCtxt; }
     };
     
     class SDLGLAPI : public SDLAPI, public mtx::gl::GL3API
@@ -67,6 +73,8 @@ namespace mtx::sdl
 	int m_presentQueue;
 	int m_graphicsQueue;
 	VkQueue m_vkPresentQueue;
+	std::vector<VkImage> m_swapChainImages;
+	std::vector<VkImageView> m_swapChainImageViews;
     public:
         virtual void createWindow(glm::ivec2 size, int type);
         virtual void beginFrame();

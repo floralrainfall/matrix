@@ -1,0 +1,2 @@
+vkvertex=shaders/vktest.vk.vert
+vkfragment=shaders/vktest.vk.frag
